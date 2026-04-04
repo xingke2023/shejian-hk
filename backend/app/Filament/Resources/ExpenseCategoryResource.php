@@ -16,7 +16,7 @@ class ExpenseCategoryResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
 
-    protected static ?string $navigationGroup = '财务管理';
+    protected static ?string $navigationGroup = '财务收支';
 
     protected static ?string $navigationLabel = '支出分类';
 
@@ -97,9 +97,9 @@ class ExpenseCategoryResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListExpenseCategories::route('/'),
+            'index' => Pages\ListExpenseCategories::route('/'),
             'create' => Pages\CreateExpenseCategory::route('/create'),
-            'edit'   => Pages\EditExpenseCategory::route('/{record}/edit'),
+            'edit' => Pages\EditExpenseCategory::route('/{record}/edit'),
         ];
     }
 }

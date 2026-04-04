@@ -22,18 +22,20 @@ class Inventory extends Model
         'last_in_at',
         'last_out_at',
         'last_counted_at',
+        'last_sold_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'current_qty'   => 'decimal:3',
+            'current_qty' => 'decimal:3',
             'available_qty' => 'decimal:3',
-            'locked_qty'    => 'decimal:3',
-            'avg_cost'      => 'decimal:4',
-            'last_in_at'    => 'datetime',
-            'last_out_at'   => 'datetime',
+            'locked_qty' => 'decimal:3',
+            'avg_cost' => 'decimal:4',
+            'last_in_at' => 'datetime',
+            'last_out_at' => 'datetime',
             'last_counted_at' => 'datetime',
+            'last_sold_at' => 'datetime',
         ];
     }
 

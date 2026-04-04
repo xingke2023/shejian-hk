@@ -17,7 +17,7 @@ class ExpenseResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
 
-    protected static ?string $navigationGroup = '财务管理';
+    protected static ?string $navigationGroup = '财务收支';
 
     protected static ?string $navigationLabel = '支出记录';
 
@@ -46,7 +46,7 @@ class ExpenseResource extends Resource
                             ->preload(),
                         Forms\Components\TextInput::make('expense_no')
                             ->label('支出单号')
-                            ->default(fn () => 'EXP-' . strtoupper(Str::random(8)))
+                            ->default(fn () => 'EXP-'.strtoupper(Str::random(8)))
                             ->required()
                             ->maxLength(50),
                         Forms\Components\TextInput::make('amount')
@@ -193,9 +193,9 @@ class ExpenseResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListExpenses::route('/'),
+            'index' => Pages\ListExpenses::route('/'),
             'create' => Pages\CreateExpense::route('/create'),
-            'edit'   => Pages\EditExpense::route('/{record}/edit'),
+            'edit' => Pages\EditExpense::route('/{record}/edit'),
         ];
     }
 }

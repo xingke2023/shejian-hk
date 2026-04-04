@@ -17,7 +17,7 @@ class SupplierResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-truck';
 
-    protected static ?string $navigationGroup = '供应商及商品管理';
+    protected static ?string $navigationGroup = '供应商及商品';
 
     protected static ?string $navigationLabel = '供应商档案';
 
@@ -161,9 +161,9 @@ class SupplierResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListSuppliers::route('/'),
+            'index' => Pages\ListSuppliers::route('/'),
             'create' => Pages\CreateSupplier::route('/create'),
-            'edit'   => Pages\EditSupplier::route('/{record}/edit'),
+            'edit' => Pages\EditSupplier::route('/{record}/edit'),
         ];
     }
 }

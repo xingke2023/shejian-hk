@@ -6,8 +6,10 @@ namespace App\Models;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements FilamentUser
@@ -15,39 +17,25 @@ class User extends Authenticatable implements FilamentUser
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
         'is_admin',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password'          => 'hashed',
-            'is_admin'          => 'boolean',
+            'password' => 'hashed',
+            'is_admin' => 'boolean',
         ];
     }
 
@@ -56,8 +44,87 @@ class User extends Authenticatable implements FilamentUser
         return $this->is_admin;
     }
 
-    public function posts()
+    public function posts(): HasMany
     {
         return $this->hasMany(Post::class);
+    }
+
+    public function storeRoles(): HasMany
+    {
+        return $this->hasMany(UserStoreRole::class);
+    }
+
+    /** 用户所有角色（跨门店/区域） */
+    public function roles(): Collection
+    {
+        return $this->storeRoles()
+            ->with('role.permissions')
+            ->get()
+            ->pluck('role')
+            ->filter()
+            ->unique('id')
+            ->values();
+    }
+
+    /** 用户所有权限码（合并所有角色） */
+    public function allPermissions(): Collection
+    {
+        if ($this->is_admin) {
+            return Permission::query()->pluck('code');
+        }
+
+        return $this->roles()
+            ->flatMap(fn (Role $role) => $role->permissions->pluck('code'))
+            ->unique()
+            ->values();
+    }
+
+    public function hasPermission(string $code): bool
+    {
+        if ($this->is_admin) {
+            return true;
+        }
+
+        return $this->allPermissions()->contains($code);
+    }
+
+    public function hasRole(string $roleCode): bool
+    {
+        if ($this->is_admin) {
+            return true;
+        }
+
+        return $this->roles()->contains('code', $roleCode);
+    }
+
+    /** 普通用户的主门店 ID（从有效的 user_store_roles 读取） */
+    public function primaryStoreId(): ?int
+    {
+        return $this->storeRoles()
+            ->where(function ($q) {
+                $q->whereNull('expired_at')->orWhere('expired_at', '>', now());
+            })
+            ->value('store_id');
+    }
+
+    /**
+     * 从当前 token 的 ability 中读取本次会话的门店 ID。
+     *
+     * token 在登录时以 store:{id} ability 写入，格式固定。
+     * 未找到时回退到 primaryStoreId()（兼容旧 token / 测试场景）。
+     */
+    public function resolveStoreId(): ?int
+    {
+        $token = $this->currentAccessToken();
+
+        if ($token) {
+            foreach ($token->abilities as $ability) {
+                if (str_starts_with($ability, 'store:')) {
+                    return (int) substr($ability, 6);
+                }
+            }
+        }
+
+        return $this->primaryStoreId();
     }
 }

@@ -3,38 +3,89 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\UserResource\Pages;
-use App\Filament\Resources\UserResource\RelationManagers;
+use App\Models\Role;
+use App\Models\Store;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-users';
+
+    protected static ?string $navigationGroup = '系统管理';
+
+    protected static ?string $navigationLabel = '用户管理';
+
+    protected static ?string $modelLabel = '用户';
+
+    protected static ?int $navigationSort = 11;
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('name')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('email')
-                    ->email()
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\DateTimePicker::make('email_verified_at'),
-                Forms\Components\TextInput::make('password')
-                    ->password()
-                    ->required()
-                    ->maxLength(255),
+                Forms\Components\Section::make('账户信息')
+                    ->columns(2)
+                    ->schema([
+                        Forms\Components\TextInput::make('name')
+                            ->label('姓名')
+                            ->required()
+                            ->maxLength(255),
+
+                        Forms\Components\TextInput::make('email')
+                            ->label('邮箱')
+                            ->email()
+                            ->required()
+                            ->maxLength(255),
+
+                        Forms\Components\TextInput::make('password')
+                            ->label('密码')
+                            ->password()
+                            ->maxLength(255)
+                            ->dehydrated(fn ($state) => filled($state))
+                            ->required(fn (string $operation) => $operation === 'create')
+                            ->helperText('编辑时留空则不修改密码'),
+
+                        Forms\Components\Toggle::make('is_admin')
+                            ->label('后台管理员')
+                            ->helperText('开启后可登录 /admin 后台，拥有最高权限')
+                            ->inline(false),
+                    ]),
+
+                Forms\Components\Section::make('角色分配')
+                    ->description('为用户分配门店角色，一个用户可同时持有多个门店的不同角色')
+                    ->schema([
+                        Forms\Components\Repeater::make('storeRoles')
+                            ->label('')
+                            ->relationship()
+                            ->schema([
+                                Forms\Components\Select::make('store_id')
+                                    ->label('门店')
+                                    ->options(Store::query()->where('status', 1)->pluck('name', 'id'))
+                                    ->searchable()
+                                    ->placeholder('总部/区域级可不选'),
+
+                                Forms\Components\Select::make('role_id')
+                                    ->label('角色')
+                                    ->options(Role::query()->pluck('name', 'id'))
+                                    ->required()
+                                    ->searchable(),
+
+                                Forms\Components\Hidden::make('granted_at')
+                                    ->default(now()),
+                            ])
+                            ->columns(2)
+                            ->addActionLabel('+ 添加角色')
+                            ->defaultItems(fn (string $operation) => $operation === 'create' ? 1 : 0)
+                            ->minItems(1)
+                            ->reorderable(false),
+                    ]),
             ]);
     }
 
@@ -43,39 +94,50 @@ class UserResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->searchable(),
+                    ->label('姓名')
+                    ->searchable()
+                    ->weight('bold'),
+
                 Tables\Columns\TextColumn::make('email')
+                    ->label('邮箱')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('email_verified_at')
-                    ->dateTime()
-                    ->sortable(),
+
+                Tables\Columns\IconColumn::make('is_admin')
+                    ->label('管理员')
+                    ->boolean()
+                    ->alignCenter(),
+
+                Tables\Columns\TextColumn::make('storeRoles')
+                    ->label('角色')
+                    ->badge()
+                    ->state(fn (User $record) => $record->storeRoles->map(
+                        fn ($sr) => ($sr->store ? $sr->store->name . ' · ' : '') . ($sr->role?->name ?? '-')
+                    )->all())
+                    ->searchable(query: fn ($query, $search) => $query->whereHas(
+                        'storeRoles.role',
+                        fn ($q) => $q->where('name', 'like', "%{$search}%")
+                    )),
+
                 Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('注册时间')
+                    ->dateTime('Y-m-d')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
             ])
+            ->modifyQueryUsing(fn ($query) => $query->with(['storeRoles.role', 'storeRoles.store']))
             ->filters([
-                //
+                Tables\Filters\TernaryFilter::make('is_admin')
+                    ->label('管理员'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->bulkActions([]);
     }
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array

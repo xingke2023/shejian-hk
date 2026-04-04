@@ -4,7 +4,10 @@ use App\Http\Controllers\Api\AiAssistantController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\PostController;
+use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\ResumeController;
+use App\Http\Controllers\Api\SalesOrderController;
 use App\Http\Controllers\Api\WeworkCallbackController;
 use Illuminate\Support\Facades\Route;
 
@@ -13,7 +16,7 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // Protected routes
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.hybrid')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
@@ -26,6 +29,26 @@ Route::middleware('auth:sanctum')->group(function () {
     // 库存
     Route::get('/inventory', [InventoryController::class, 'index']);
     Route::get('/inventory/transactions', [InventoryController::class, 'transactions']);
+    Route::get('/inventory/daily-overview', [InventoryController::class, 'dailyOverview']);
+    Route::post('/inventory/adjust', [InventoryController::class, 'adjust']);
+    Route::post('/inventory/sales-summary', [InventoryController::class, 'updateSalesSummary']);
+
+    // 今日操作日志
+    Route::get('/daily-logs', [InventoryController::class, 'dailyLogs']);
+
+    // 零售流水
+    Route::get('/sales/today', [SalesOrderController::class, 'todaySummary']);
+    Route::get('/sales/summary', [SalesOrderController::class, 'summary']);
+    Route::post('/sales/supplement', [SalesOrderController::class, 'supplement']);
+    Route::apiResource('/sales', SalesOrderController::class)->only(['index', 'store', 'show']);
+
+    // 商品
+    Route::get('/products', [ProductController::class, 'index']);
+
+    // 进货单
+    Route::get('/purchase-orders', [PurchaseOrderController::class, 'index']);
+    Route::get('/purchase-orders/{id}', [PurchaseOrderController::class, 'show']);
+    Route::post('/purchase-orders', [PurchaseOrderController::class, 'store']);
 
     // 人才简历库
     Route::post('/resumes/parse', [ResumeController::class, 'parse']);
@@ -38,12 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('/wework/callback', [WeworkCallbackController::class, 'verify']);
 Route::post('/wework/callback', [WeworkCallbackController::class, 'receive']);
 
-// Post routes (index and show are public, rest require auth)
-Route::get('/posts', [PostController::class, 'index']);
-Route::get('/posts/{post}', [PostController::class, 'show']);
-
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/posts', [PostController::class, 'store']);
-    Route::put('/posts/{post}', [PostController::class, 'update']);
-    Route::delete('/posts/{post}', [PostController::class, 'destroy']);
+// Posts — all require auth
+Route::middleware('auth.hybrid')->group(function () {
+    Route::apiResource('/posts', PostController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
 });

@@ -16,13 +16,15 @@ class InventoryResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-archive-box';
 
-    protected static ?string $navigationGroup = '库存管理';
+    protected static ?string $navigationGroup = '销售管理';
 
     protected static ?string $navigationLabel = '门店库存';
 
     protected static ?string $modelLabel = '库存';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?string $pluralModelLabel = '库存';
+
+    protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form
     {
@@ -78,10 +80,6 @@ class InventoryResource extends Resource
                     ->label('当前库存')
                     ->sortable()
                     ->numeric(decimalPlaces: 2),
-                Tables\Columns\TextColumn::make('available_qty')
-                    ->label('可用库存')
-                    ->numeric(decimalPlaces: 2)
-                    ->toggleable(),
                 Tables\Columns\TextColumn::make('avg_cost')
                     ->label('平均成本')
                     ->numeric(decimalPlaces: 2)
@@ -96,11 +94,14 @@ class InventoryResource extends Resource
                     ->dateTime('m-d H:i')
                     ->placeholder('—')
                     ->toggleable(),
+                Tables\Columns\TextColumn::make('last_sold_at')
+                    ->label('最后销售时间')
+                    ->dateTime('m-d H:i')
+                    ->placeholder('—')
+                    ->color('danger')
+                    ->toggleable(),
             ])
             ->filters([
-                Tables\Filters\SelectFilter::make('store_id')
-                    ->label('门店')
-                    ->relationship('store', 'name'),
                 Tables\Filters\Filter::make('low_stock')
                     ->label('低库存（≤10）')
                     ->query(fn ($query) => $query->where('current_qty', '<=', 10)),
@@ -121,7 +122,7 @@ class InventoryResource extends Resource
     {
         return [
             'index' => Pages\ListInventory::route('/'),
-            'edit'  => Pages\EditInventory::route('/{record}/edit'),
+            'edit' => Pages\EditInventory::route('/{record}/edit'),
         ];
     }
 }

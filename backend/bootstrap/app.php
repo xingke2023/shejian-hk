@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         ]);
 
+        $middleware->alias([
+            'auth.hybrid' => \App\Http\Middleware\JwtOrSanctumAuth::class,
+        ]);
+
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);
