@@ -15,6 +15,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuth();
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
@@ -35,11 +36,13 @@ export default function RegisterPage() {
     try {
       await register({
         name,
+        username,
         email,
         password,
         password_confirmation: passwordConfirmation,
+        store_id: 1,
       });
-      router.push('/');
+      router.push('/manage');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
@@ -55,10 +58,8 @@ export default function RegisterPage() {
       </div>
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Register</CardTitle>
-          <CardDescription>
-            Create a new account to get started
-          </CardDescription>
+          <CardTitle>注册账号</CardTitle>
+          <CardDescription>创建门店管理账号</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -68,29 +69,40 @@ export default function RegisterPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">姓名</Label>
               <Input
                 id="name"
                 type="text"
-                placeholder="John Doe"
+                placeholder="请输入姓名"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">用户名</Label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="字母/数字/下划线"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">邮箱</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="john@example.com"
+                placeholder="请输入邮箱"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">密码</Label>
               <Input
                 id="password"
                 type="password"
@@ -101,7 +113,7 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password_confirmation">Confirm Password</Label>
+              <Label htmlFor="password_confirmation">确认密码</Label>
               <Input
                 id="password_confirmation"
                 type="password"
@@ -112,13 +124,11 @@ export default function RegisterPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating account...' : 'Register'}
+              {loading ? '注册中...' : '注册'}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
-              <Link href="/login" className="underline">
-                Login
-              </Link>
+              已有账号？{' '}
+              <Link href="/login" className="underline">登录</Link>
             </p>
           </form>
         </CardContent>

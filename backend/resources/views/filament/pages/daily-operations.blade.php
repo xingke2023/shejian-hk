@@ -1,26 +1,81 @@
 <x-filament-panels::page>
 
-    {{-- 日期 + 门店筛选 --}}
-    <x-filament::section>
-        <div class="flex flex-wrap items-center gap-4">
-            <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">日期</span>
-                <input type="date" wire:model.live="date"
-                    class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:outline-none
-                           dark:border-white/10 dark:bg-white/5 dark:text-white">
-            </div>
-            <div class="flex items-center gap-2">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">门店</span>
-                <select wire:model.live="storeId"
-                    class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:outline-none
-                           dark:border-white/10 dark:bg-white/5 dark:text-white">
-                    @foreach ($this->getStoreOptions() as $val => $label)
-                        <option value="{{ $val }}">{{ $label }}</option>
+    {{-- 日期选择 + 门店筛选 --}}
+    <div x-data="{ open: false }" x-on:date-selected.window="open = false">
+
+        {{-- 顶栏：折叠按钮 + 门店 checkbox --}}
+        <div class="flex items-center gap-4 flex-wrap">
+            <button
+                x-on:click="open = !open"
+                class="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition dark:border-white/10 dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10"
+            >
+                <x-heroicon-m-calendar-days class="w-4 h-4 text-gray-400" />
+                <span>选择日期</span>
+                <span class="font-semibold text-primary-600 dark:text-primary-400">{{ $date }}</span>
+                <x-heroicon-m-chevron-down class="w-3.5 h-3.5 text-gray-400 transition-transform" x-bind:class="open && 'rotate-180'" />
+            </button>
+
+            @foreach ($this->getStoreOptions() as $id => $name)
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox"
+                        wire:model.live="selectedStoreIds"
+                        value="{{ $id }}"
+                        class="rounded border-gray-300 text-primary-600 shadow-sm focus:ring-primary-500 dark:border-white/20 dark:bg-white/5">
+                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ $name }}</span>
+                </label>
+            @endforeach
+        </div>
+
+        {{-- 日历面板 --}}
+        <div x-show="open" x-transition x-cloak class="mt-2 w-64">
+            <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-md dark:border-white/10 dark:bg-gray-900">
+                {{-- 月份标题 + 翻页 --}}
+                <div class="flex items-center justify-between mb-3">
+                    <button wire:click="prevMonth"
+                        class="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 transition">
+                        <x-heroicon-m-chevron-left class="w-4 h-4" />
+                    </button>
+                    <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                        {{ $calendarYear }} 年 {{ $calendarMonth }} 月
+                    </span>
+                    <button wire:click="nextMonth"
+                        class="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 transition">
+                        <x-heroicon-m-chevron-right class="w-4 h-4" />
+                    </button>
+                </div>
+
+                {{-- 星期表头 --}}
+                <div class="grid grid-cols-7 mb-1">
+                    @foreach (['一','二','三','四','五','六','日'] as $dow)
+                        <div class="text-center text-xs font-medium text-gray-400 dark:text-gray-500 py-0.5">{{ $dow }}</div>
                     @endforeach
-                </select>
+                </div>
+
+                {{-- 日期格 --}}
+                <div class="grid grid-cols-7 gap-y-0.5">
+                    @foreach ($this->getCalendarDays() as $day)
+                        <button
+                            wire:click="selectDate('{{ $day['date'] }}')"
+                            @class([
+                                'flex items-center justify-center rounded-md text-sm h-7 w-full transition-colors focus:outline-none',
+                                'bg-primary-600 text-white font-semibold shadow'
+                                    => $day['isSelected'],
+                                'ring-2 ring-primary-400 text-primary-700 dark:text-primary-300 font-semibold'
+                                    => $day['isToday'] && !$day['isSelected'],
+                                'text-gray-800 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10'
+                                    => $day['inMonth'] && !$day['isSelected'] && !$day['isToday'],
+                                'text-gray-300 dark:text-gray-600 hover:bg-gray-50 dark:hover:bg-white/5'
+                                    => !$day['inMonth'],
+                            ])
+                        >
+                            {{ $day['day'] }}
+                        </button>
+                    @endforeach
+                </div>
             </div>
         </div>
-    </x-filament::section>
+
+    </div>
 
     @php
         $data   = $this->getData();

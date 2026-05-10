@@ -14,7 +14,7 @@ import { ThemeColorPicker } from '@/components/theme-color-picker';
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [loginField, setLoginField] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,8 +25,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login({ email, password });
-      router.push('/');
+      await login({ login: loginField, password });
+      router.push('/manage');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -42,9 +42,9 @@ export default function LoginPage() {
       </div>
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Login</CardTitle>
+          <CardTitle>舌尖香港</CardTitle>
           <CardDescription>
-            Enter your credentials to access your account
+            请输入账号密码登录门店管理系统
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -55,13 +55,13 @@ export default function LoginPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="login">邮箱 / 用户名</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="john@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="login"
+                type="text"
+                placeholder="用户名或邮箱"
+                value={loginField}
+                onChange={(e) => setLoginField(e.target.value)}
                 required
               />
             </div>

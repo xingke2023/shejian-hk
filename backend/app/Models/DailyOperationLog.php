@@ -16,6 +16,9 @@ class DailyOperationLog extends Model
         'content',
         'intent',
         'is_operational',
+        'is_failed',
+        'http_status_code',
+        'error_message',
         'product_id',
         'qty_change',
         'reference_type',
@@ -29,6 +32,7 @@ class DailyOperationLog extends Model
             'date' => 'date',
             'occurred_at' => 'datetime',
             'is_operational' => 'boolean',
+            'is_failed' => 'boolean',
             'qty_change' => 'decimal:3',
         ];
     }
@@ -52,9 +56,12 @@ class DailyOperationLog extends Model
      * 记录一条操作日志。
      *
      * @param  string  $content  人可读描述
-     * @param  string  $intent  stock_in|stock_out|sold_out|damage|adjust|supplement|note|other
+     * @param  string  $intent  stock_in|stock_out|sold_out|damage|adjust|supplement|note|other|error
      * @param  int  $source  1=AI 2=手动API 3=Filament后台
      * @param  bool  $isOperational  是否影响库存/销售
+     * @param  bool  $isFailed  是否为失败调用
+     * @param  int|null  $httpStatusCode  HTTP状态码（失败时记录）
+     * @param  string|null  $errorMessage  错误描述
      * @param  Carbon|null  $occurredAt  默认 now()
      */
     public static function write(
@@ -68,7 +75,10 @@ class DailyOperationLog extends Model
         ?string $referenceType = null,
         ?int $referenceId = null,
         ?int $operatorId = null,
-        ?Carbon $occurredAt = null
+        ?Carbon $occurredAt = null,
+        bool $isFailed = false,
+        ?int $httpStatusCode = null,
+        ?string $errorMessage = null,
     ): self {
         $at = $occurredAt ?? now();
 
@@ -80,6 +90,9 @@ class DailyOperationLog extends Model
             'content' => $content,
             'intent' => $intent,
             'is_operational' => $isOperational,
+            'is_failed' => $isFailed,
+            'http_status_code' => $httpStatusCode,
+            'error_message' => $errorMessage,
             'product_id' => $productId,
             'qty_change' => $qtyChange,
             'reference_type' => $referenceType,

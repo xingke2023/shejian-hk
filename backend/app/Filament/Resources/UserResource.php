@@ -8,6 +8,7 @@ use App\Models\Store;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -111,7 +112,7 @@ class UserResource extends Resource
                     ->label('角色')
                     ->badge()
                     ->state(fn (User $record) => $record->storeRoles->map(
-                        fn ($sr) => ($sr->store ? $sr->store->name . ' · ' : '') . ($sr->role?->name ?? '-')
+                        fn ($sr) => ($sr->store ? $sr->store->name.' · ' : '').($sr->role?->name ?? '-')
                     )->all())
                     ->searchable(query: fn ($query, $search) => $query->whereHas(
                         'storeRoles.role',
@@ -123,6 +124,13 @@ class UserResource extends Resource
                     ->dateTime('Y-m-d')
                     ->sortable()
                     ->toggleable(),
+
+                Tables\Columns\TextColumn::make('api_keys_count')
+                    ->label('API Keys')
+                    ->state(fn (User $record) => $record->tokens()->where('name', 'like', 'api:%')->count())
+                    ->badge()
+                    ->color('warning')
+                    ->alignCenter(),
             ])
             ->modifyQueryUsing(fn ($query) => $query->with(['storeRoles.role', 'storeRoles.store']))
             ->filters([
@@ -131,6 +139,54 @@ class UserResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+
+                Tables\Actions\Action::make('generateApiKey')
+                    ->label('生成 API Key')
+                    ->icon('heroicon-o-key')
+                    ->color('warning')
+                    ->form([
+                        Forms\Components\TextInput::make('description')
+                            ->label('用途描述')
+                            ->required()
+                            ->placeholder('例如：门店机器人、企业微信集成')
+                            ->maxLength(100),
+                    ])
+                    ->action(function (User $record, array $data): void {
+                        $newToken = $record->createToken('api:'.$data['description']);
+                        Notification::make()
+                            ->title('API Key 已生成（仅显示一次，请立即复制）')
+                            ->body($newToken->plainTextToken)
+                            ->persistent()
+                            ->success()
+                            ->send();
+                    }),
+
+                Tables\Actions\Action::make('revokeApiKey')
+                    ->label('撤销密钥')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->form([
+                        Forms\Components\Select::make('token_id')
+                            ->label('选择要撤销的密钥')
+                            ->options(fn (User $record) => $record->tokens()
+                                ->where('name', 'like', 'api:%')
+                                ->get()
+                                ->mapWithKeys(fn ($t) => [
+                                    $t->id => str_replace('api:', '', $t->name)
+                                        .' — 创建于 '.$t->created_at->format('Y-m-d')
+                                        .($t->last_used_at ? '，最后使用 '.$t->last_used_at->format('Y-m-d') : '，从未使用'),
+                                ])
+                            )
+                            ->required(),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalHeading('撤销 API Key')
+                    ->modalDescription('撤销后该密钥立即失效，无法恢复。')
+                    ->action(function (User $record, array $data): void {
+                        $record->tokens()->where('id', $data['token_id'])->delete();
+                        Notification::make()->title('密钥已撤销')->success()->send();
+                    })
+                    ->visible(fn (User $record) => $record->tokens()->where('name', 'like', 'api:%')->exists()),
             ])
             ->bulkActions([]);
     }

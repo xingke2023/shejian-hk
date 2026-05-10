@@ -430,6 +430,90 @@ class SalesOrderController extends Controller
     }
 
     /**
+     * 每日销售报表（含汇总、来源明细、逐品种销售明细）。
+     *
+     * GET /api/sales/report?date=YYYY-MM-DD
+     */
+    public function dailyReport(Request $request): JsonResponse
+    {
+        $storeId = $request->user()->resolveStoreId();
+        if (! $storeId) {
+            return response()->json(['message' => '该账号未关联任何门店'], 403);
+        }
+
+        $date = $request->input('date', today()->toDateString());
+
+        // 当日已完成订单
+        $orders = SalesOrder::where('store_id', $storeId)
+            ->whereDate('sold_at', $date)
+            ->where('status', 1)
+            ->get();
+
+        // per-product 汇总
+        $summaries = SalesDailySummary::with('product:id,name,unit,is_fresh')
+            ->where('store_id', $storeId)
+            ->where('sale_date', $date)
+            ->orderByDesc('sales_amount')
+            ->get();
+
+        $paymentLabels = [1 => '现金', 2 => '微信', 3 => '支付宝', 4 => '银行卡', 5 => '混合'];
+
+        $paymentBreakdown = $orders->groupBy('payment_method')
+            ->map(fn ($group, $method) => [
+                'method' => $method,
+                'label' => $paymentLabels[$method] ?? '其他',
+                'count' => $group->count(),
+                'amount' => round($group->sum('paid_amount'), 2),
+            ])
+            ->values();
+
+        $products = $summaries->map(fn ($row) => [
+            'product_id' => $row->product_id,
+            'product_name' => $row->product?->name,
+            'unit' => $row->product?->unit,
+            'is_fresh' => $row->product?->is_fresh,
+            'sales_qty' => (float) $row->sales_qty,
+            'sales_amount' => (float) $row->sales_amount,
+            'avg_price' => $row->avg_selling_price ? (float) $row->avg_selling_price : null,
+            'transaction_count' => (int) $row->transaction_count,
+            'sales_breakdown' => [
+                'pos' => ['qty' => (float) $row->pos_qty,        'amount' => (float) $row->pos_amount],
+                'supplement' => ['qty' => (float) $row->supplement_qty, 'amount' => (float) $row->supplement_amount],
+                'ai' => ['qty' => (float) $row->ai_qty,         'amount' => (float) $row->ai_amount],
+            ],
+        ]);
+
+        $totalQty = round($summaries->sum('sales_qty'), 3);
+        $totalAmount = round($summaries->sum('sales_amount'), 2);
+
+        return response()->json([
+            'data' => [
+                'date' => $date,
+                'total_orders' => $orders->count(),
+                'total_skus' => $summaries->count(),
+                'total_qty' => $totalQty,
+                'total_amount' => $totalAmount,
+                'payment_breakdown' => $paymentBreakdown,
+                'source_breakdown' => [
+                    'pos' => [
+                        'qty' => round($summaries->sum('pos_qty'), 3),
+                        'amount' => round($summaries->sum('pos_amount'), 2),
+                    ],
+                    'supplement' => [
+                        'qty' => round($summaries->sum('supplement_qty'), 3),
+                        'amount' => round($summaries->sum('supplement_amount'), 2),
+                    ],
+                    'ai' => [
+                        'qty' => round($summaries->sum('ai_qty'), 3),
+                        'amount' => round($summaries->sum('ai_amount'), 2),
+                    ],
+                ],
+                'products' => $products,
+            ],
+        ]);
+    }
+
+    /**
      * 今日销售汇总（总金额、总单数、各支付方式占比）。
      */
     public function todaySummary(Request $request): JsonResponse
@@ -449,34 +533,23 @@ class SalesOrderController extends Controller
             ->where('sale_date', today())
             ->get();
 
-        $paymentLabels = [1 => '现金', 2 => '微信', 3 => '支付宝', 4 => '银行卡', 5 => '混合'];
-
-        $byPayment = $orders->groupBy('payment_method')->map(fn ($group, $method) => [
-            'method' => $paymentLabels[$method] ?? '其他',
-            'count' => $group->count(),
-            'total_amount' => round($group->sum('paid_amount'), 2),
-        ])->values();
+        $paymentBreakdown = $orders->groupBy('payment_method')
+            ->map(fn ($group) => round($group->sum('paid_amount'), 2));
 
         return response()->json([
             'data' => [
                 'date' => today()->toDateString(),
-                'order_count' => $orders->count(),
+                'total_orders' => $orders->count(),
                 'total_amount' => round($orders->sum('paid_amount'), 2),
-                'by_payment' => $byPayment,
-                // 销售来源拆分（跨所有商品汇总）
+                'total_qty' => round($summaries->sum('sales_qty'), 3),
+                'payment_breakdown' => $paymentBreakdown,
                 'sales_breakdown' => [
-                    'pos' => [
-                        'qty' => round($summaries->sum('pos_qty'), 3),
-                        'amount' => round($summaries->sum('pos_amount'), 2),
-                    ],
-                    'supplement' => [
-                        'qty' => round($summaries->sum('supplement_qty'), 3),
-                        'amount' => round($summaries->sum('supplement_amount'), 2),
-                    ],
-                    'ai' => [
-                        'qty' => round($summaries->sum('ai_qty'), 3),
-                        'amount' => round($summaries->sum('ai_amount'), 2),
-                    ],
+                    'pos_qty' => round($summaries->sum('pos_qty'), 3),
+                    'pos_amount' => round($summaries->sum('pos_amount'), 2),
+                    'supplement_qty' => round($summaries->sum('supplement_qty'), 3),
+                    'supplement_amount' => round($summaries->sum('supplement_amount'), 2),
+                    'ai_qty' => round($summaries->sum('ai_qty'), 3),
+                    'ai_amount' => round($summaries->sum('ai_amount'), 2),
                 ],
             ],
         ]);

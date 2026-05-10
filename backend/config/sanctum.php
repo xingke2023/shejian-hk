@@ -47,7 +47,7 @@ return [
     |
     */
 
-    'expiration' => 43200, // 30 天（分钟）
+    'expiration' => null, // 由每个 token 的 expires_at 列自己控制；登录 token 在 AuthController 创建时显式传 30 天，API Key 不传（永不过期）
 
     /*
     |--------------------------------------------------------------------------

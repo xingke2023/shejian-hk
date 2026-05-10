@@ -11,12 +11,14 @@ use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -30,6 +32,11 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->brandName('舌尖香港门店AI助手')
             ->brandLogo(null)
+            ->brandLogoHeight('2.5rem')
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn (): HtmlString => new HtmlString('<style>.fi-logo { font-size: 2.2rem !important; font-weight: 300 !important; } .fi-sidebar-header .fi-logo { font-size: 1.5rem !important; } .fi-simple-header-heading { display: none !important; }</style>'),
+            )
             ->colors([
                 'primary' => Color::Amber,
             ])

@@ -36,7 +36,7 @@ class AuthController extends Controller
         ]);
 
         $storeIdInt = $request->integer('store_id');
-        $token = $user->createToken('auth_token', ['store:'.$storeIdInt])->plainTextToken;
+        $token = $user->createToken('auth_token', ['store:'.$storeIdInt], now()->addDays(30))->plainTextToken;
         $jwtToken = app(JwtService::class)->issueForUser($user, $storeIdInt);
 
         return response()->json([
@@ -108,7 +108,7 @@ class AuthController extends Controller
         }
 
         // 将 store_id 编码进 token ability，后续请求从 token 中读取
-        $token = $user->createToken('auth_token', ['store:'.$storeId])->plainTextToken;
+        $token = $user->createToken('auth_token', ['store:'.$storeId], now()->addDays(30))->plainTextToken;
         $jwtToken = app(JwtService::class)->issueForUser($user, $storeId);
 
         return response()->json([

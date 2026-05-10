@@ -20,6 +20,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.hybrid' => \App\Http\Middleware\JwtOrSanctumAuth::class,
         ]);
 
+        $middleware->api(append: [
+            \App\Http\Middleware\LogApiFailures::class,
+        ]);
+
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);

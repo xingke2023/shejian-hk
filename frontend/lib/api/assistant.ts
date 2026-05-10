@@ -22,6 +22,9 @@ export interface AiMessageResponse {
   operations: AiOperation[]
   session_id: number
   transcribed_text?: string
+  card_type?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  card_data?: any
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'

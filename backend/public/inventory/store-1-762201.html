@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>舌尖香港 · 库存清单</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif; background: #f5f5f5; color: #333; }
+  .header { background: linear-gradient(135deg, #e8521a, #c0392b); color: #fff; padding: 20px 24px; }
+  .header h1 { font-size: 20px; font-weight: 700; }
+  .header p { font-size: 13px; opacity: .8; margin-top: 4px; }
+  .stats { display: flex; gap: 12px; padding: 16px 24px; background: #fff; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+  .stat { background: #f9f9f9; border-radius: 8px; padding: 10px 16px; min-width: 100px; }
+  .stat .num { font-size: 22px; font-weight: 700; color: #e8521a; }
+  .stat .label { font-size: 12px; color: #888; margin-top: 2px; }
+  .container { padding: 16px 24px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  th { background: #fafafa; padding: 11px 14px; text-align: left; font-size: 13px; color: #555; border-bottom: 2px solid #eee; }
+  td { padding: 10px 14px; font-size: 14px; border-bottom: 1px solid #f2f2f2; vertical-align: middle; }
+  td.qty { font-weight: 600; font-size: 15px; }
+  tr.sold-out td { color: #bbb; }
+  tr.sold-out td.qty { color: #e74c3c; }
+  tr.low-stock td.qty { color: #e67e22; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; margin-left: 6px; vertical-align: middle; }
+  .badge-danger { background: #fdecea; color: #e74c3c; }
+  .badge-warning { background: #fef9e7; color: #e67e22; }
+  .footer { text-align: center; padding: 20px; font-size: 12px; color: #aaa; }
+  @media (max-width: 600px) { th:nth-child(4), td:nth-child(4) { display: none; } .container { padding: 12px; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🥬 舌尖香港 · 库存清单</h1>
+  <p>筲箕湾店（门店 #1）· 生成时间：2026-04-29 08:21:41</p>
+</div>
+<div class="stats">
+  <div class="stat"><div class="num">23</div><div class="label">商品总数</div></div>
+  <div class="stat"><div class="num">4</div><div class="label">售罄商品</div></div>
+  <div class="stat"><div class="num">2026-04-29 08:21:41</div><div class="label">更新时间</div></div>
+</div>
+<div class="container">
+  <table>
+    <thead><tr><th>商品名称</th><th>单位</th><th>当前库存</th><th>最后销售</th><th>更新时间</th></tr></thead>
+    <tbody><tr class="sold-out"><td>苹果</td><td>斤 <span class="badge badge-danger">售罄</span></td><td class="qty">0 斤</td><td>04-29 08:19</td><td>04-29 08:19</td></tr><tr class="sold-out"><td>精品草莓</td><td>斤 <span class="badge badge-danger">售罄</span></td><td class="qty">0 斤</td><td>—</td><td>04-28 13:08</td></tr><tr class=""><td>胡萝卜</td><td>斤 </td><td class="qty">20 斤</td><td>04-27 21:28</td><td>04-28 12:46</td></tr><tr class=""><td>白菜</td><td>斤 </td><td class="qty">80 斤</td><td>04-27 22:26</td><td>04-27 22:26</td></tr><tr class="sold-out"><td>12</td><td>斤 <span class="badge badge-danger">售罄</span></td><td class="qty">0 斤</td><td>—</td><td>04-27 20:56</td></tr><tr class="sold-out"><td>水蜜桃</td><td>斤 <span class="badge badge-danger">售罄</span></td><td class="qty">0 斤</td><td>—</td><td>04-16 22:45</td></tr><tr class="low-stock"><td>散装串茄</td><td>斤 <span class="badge badge-warning">低库存</span></td><td class="qty">1 斤</td><td>—</td><td>04-16 12:17</td></tr><tr class="low-stock"><td>赣南橙</td><td>斤 <span class="badge badge-warning">低库存</span></td><td class="qty">2 斤</td><td>—</td><td>04-16 12:17</td></tr><tr class="low-stock"><td>菠萝蜜</td><td>斤 <span class="badge badge-warning">低库存</span></td><td class="qty">1 斤</td><td>—</td><td>04-16 12:17</td></tr><tr class="low-stock"><td>大木瓜</td><td>斤 <span class="badge badge-warning">低库存</span></td><td class="qty">1 斤</td><td>—</td><td>04-16 12:17</td></tr><tr class="low-stock"><td>菠萝</td><td>斤 <span class="badge badge-warning">低库存</span></td><td class="qty">1 斤</td><td>—</td><td>04-16 12:17</td></tr><tr class="low-stock"><td>野生苹果</td><td>斤 <span class="badge badge-warning">低库存</span></td><td class="qty">1 斤</td><td>—</td><td>04-16 12:17</td></tr><tr class=""><td>土豆</td><td>斤 </td><td class="qty">112.8 斤</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>香蕉</td><td>斤 </td><td class="qty">13.9 斤</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>洋葱</td><td>斤 </td><td class="qty">19.8 斤</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>豆腐</td><td>块 </td><td class="qty">61.2 块</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>鲈鱼</td><td>斤 </td><td class="qty">22.5 斤</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>鸡胸肉</td><td>斤 </td><td class="qty">28.6 斤</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>猪五花肉</td><td>斤 </td><td class="qty">33.2 斤</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>豆芽</td><td>斤 </td><td class="qty">18.7 斤</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>花蛤</td><td>斤 </td><td class="qty">11.7 斤</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>猪排骨</td><td>斤 </td><td class="qty">7.1 斤</td><td>—</td><td>03-22 19:24</td></tr><tr class=""><td>橙子</td><td>斤 </td><td class="qty">20.9 斤</td><td>—</td><td>03-22 19:24</td></tr></tbody>
+  </table>
+</div>
+<div class="footer">舌尖香港 · AI店长助手 · 页面每次查询库存时自动更新</div>
+</body>
+</html>

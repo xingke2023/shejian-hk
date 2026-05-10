@@ -10,13 +10,17 @@ use App\Models\Inventory;
 use App\Models\InventoryDailySnapshot;
 use App\Models\InventoryTransaction;
 use App\Models\Product;
+use App\Models\PurchaseOrder;
 use App\Models\SalesDailySummary;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderItem;
+use App\Models\WeatherLog;
 use App\Services\AiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -82,7 +86,17 @@ class AiAssistantController extends Controller
         // 分发到库存
         $operations = [];
         $intent = $parsed['intent'] ?? 'other';
-        $isOp = $intent !== 'other';
+        $queryIntents = ['inventory_query', 'sales_today_query', 'daily_overview_query', 'purchase_orders_query', 'daily_logs_query', 'weather_query'];
+        $isQuery = in_array($intent, $queryIntents);
+        $isOp = ! in_array($intent, ['other', ...$queryIntents]);
+
+        // 查询类：直接查 DB 返回数据，不写库存
+        $cardType = null;
+        $cardData = null;
+        if ($isQuery) {
+            $date = $parsed['date'] ?? now()->toDateString();
+            [$cardType, $cardData] = $this->fetchQueryData($intent, $session->store_id, $date);
+        }
 
         if ($isOp && ! empty($parsed['items'])) {
             $operations = $this->dispatchToInventory(
@@ -93,8 +107,7 @@ class AiAssistantController extends Controller
             );
         }
 
-        // 记录今日操作日志
-        // 有具体商品操作时，每个商品单独一条（带 product_id / qty_change）
+        // 记录操作日志
         if ($isOp && ! empty($operations)) {
             foreach ($operations as $op) {
                 DailyOperationLog::write(
@@ -111,7 +124,6 @@ class AiAssistantController extends Controller
                 );
             }
         } else {
-            // 无商品操作（other / 解析失败）也留一条存档
             DailyOperationLog::write(
                 storeId: $session->store_id,
                 content: 'AI助手: '.($text ?: '[图片输入]'),
@@ -126,8 +138,10 @@ class AiAssistantController extends Controller
 
         return response()->json([
             'reply' => $parsed['reply'] ?? '已收到您的信息。',
-            'intent' => $parsed['intent'] ?? 'other',
+            'intent' => $intent,
             'operations' => $operations,
+            'card_type' => $cardType,
+            'card_data' => $cardData,
             'session_id' => $session->id,
         ]);
     }
@@ -192,7 +206,16 @@ class AiAssistantController extends Controller
 
         $operations = [];
         $intent = $parsed['intent'] ?? 'other';
-        $isOp = $intent !== 'other';
+        $queryIntents = ['inventory_query', 'sales_today_query', 'daily_overview_query', 'purchase_orders_query', 'daily_logs_query', 'weather_query'];
+        $isQuery = in_array($intent, $queryIntents);
+        $isOp = ! in_array($intent, ['other', ...$queryIntents]);
+
+        $cardType = null;
+        $cardData = null;
+        if ($isQuery) {
+            $date = $parsed['date'] ?? now()->toDateString();
+            [$cardType, $cardData] = $this->fetchQueryData($intent, $session->store_id, $date);
+        }
 
         if ($isOp && ! empty($parsed['items'])) {
             $operations = $this->dispatchToInventory(
@@ -235,8 +258,10 @@ class AiAssistantController extends Controller
         return response()->json([
             'transcribed_text' => $transcribedText,
             'reply' => $parsed['reply'] ?? '已收到您的语音信息。',
-            'intent' => $parsed['intent'] ?? 'other',
+            'intent' => $intent,
             'operations' => $operations,
+            'card_type' => $cardType,
+            'card_data' => $cardData,
             'session_id' => $session->id,
         ]);
     }
@@ -415,6 +440,159 @@ class AiAssistantController extends Controller
         }
 
         return $operations;
+    }
+
+    /**
+     * 根据查询意图从 DB 取数据，返回 [card_type, card_data]。
+     */
+    private function fetchQueryData(string $intent, int $storeId, string $date): array
+    {
+        return match ($intent) {
+            'inventory_query' => [
+                'inventory',
+                ['data' => Inventory::with('product')
+                    ->where('store_id', $storeId)
+                    ->get()
+                    ->map(fn ($inv) => [
+                        'current_qty' => $inv->current_qty,
+                        'last_sold_at' => $inv->last_sold_at,
+                        'product' => ['name' => $inv->product?->name, 'unit' => $inv->product?->unit],
+                    ])->values()],
+            ],
+
+            'sales_today_query' => [
+                'sales_today',
+                (function () use ($storeId, $date): array {
+                    $orders = SalesOrder::where('store_id', $storeId)
+                        ->whereDate('sold_at', $date)
+                        ->where('status', 1)
+                        ->get();
+
+                    return ['data' => [
+                        'total_amount' => $orders->sum('total_amount'),
+                        'total_orders' => $orders->count(),
+                        'payment_breakdown' => $orders->groupBy('payment_method')
+                            ->map(fn ($g) => $g->sum('paid_amount')),
+                    ]];
+                })(),
+            ],
+
+            'daily_overview_query' => [
+                'daily_overview',
+                ['data' => InventoryDailySnapshot::with('product')
+                    ->where('store_id', $storeId)
+                    ->where('date', $date)
+                    ->get()
+                    ->map(fn ($s) => [
+                        'product_name' => $s->product?->name,
+                        'opening_qty' => $s->opening_qty,
+                        'received_qty' => $s->received_qty,
+                        'sold_qty' => $s->sold_qty,
+                        'closing_qty' => $s->closing_qty,
+                        'sold_out_at' => $s->sold_out_at,
+                    ])->values()],
+            ],
+
+            'purchase_orders_query' => [
+                'purchase_orders',
+                ['data' => PurchaseOrder::with('items.product')
+                    ->where('store_id', $storeId)
+                    ->where('date', $date)
+                    ->latest()
+                    ->get()],
+            ],
+
+            'daily_logs_query' => [
+                'daily_logs',
+                ['data' => DailyOperationLog::where('store_id', $storeId)
+                    ->whereDate('created_at', $date)
+                    ->latest()
+                    ->get()
+                    ->map(fn ($l) => [
+                        'source' => $l->source,
+                        'content' => $l->content,
+                        'intent' => $l->intent,
+                        'created_at' => $l->created_at,
+                    ])->values()],
+            ],
+
+            'weather_query' => $this->fetchWeatherData($date, $storeId),
+
+            default => [null, null],
+        };
+    }
+
+    /**
+     * 调用天气 API（带 DB 缓存），返回 [card_type, card_data]。
+     */
+    private function fetchWeatherData(string $date, int $storeId): array
+    {
+        $city = '香港';
+
+        $existing = WeatherLog::where('date', $date)->where('city', $city)->first();
+        if ($existing) {
+            return ['weather', ['data' => [
+                'city' => $city,
+                'date' => $date,
+                'condition' => $existing->weather,
+                'temperature' => $existing->temperature_high,
+                'temperature_high' => $existing->temperature_high,
+                'temperature_low' => $existing->temperature_low,
+                'humidity' => $existing->humidity,
+                'rain_probability' => $existing->rain_probability,
+                'suggestion' => $existing->description,
+            ]]];
+        }
+
+        try {
+            $response = Http::baseUrl(config('ai.base_url'))
+                ->withToken(config('ai.api_key'))
+                ->timeout(30)
+                ->post('/chat/completions', [
+                    'model' => config('ai.model'),
+                    'messages' => [
+                        ['role' => 'system', 'content' => '你是天气查询助手。严格只返回JSON，不要任何其他文字。'],
+                        ['role' => 'user', 'content' => "查询{$city}在{$date}的天气。返回格式：{\"weather\":\"天气状况\",\"temperature_high\":最高气温整数,\"temperature_low\":最低气温整数,\"humidity\":湿度整数,\"rain_probability\":降雨概率整数,\"uv_index\":紫外线指数整数,\"description\":\"一句话生鲜门店提示\"}"],
+                    ],
+                    'temperature' => 0.3,
+                    'response_format' => ['type' => 'json_object'],
+                ]);
+
+            $content = $response->json('choices.0.message.content', '{}');
+            $weather = json_decode($content, true) ?? [];
+
+            if (! empty($weather)) {
+                WeatherLog::firstOrCreate(
+                    ['date' => $date, 'city' => $city],
+                    [
+                        'store_id' => $storeId,
+                        'weather' => $weather['weather'] ?? '',
+                        'temperature_high' => $weather['temperature_high'] ?? 0,
+                        'temperature_low' => $weather['temperature_low'] ?? 0,
+                        'humidity' => $weather['humidity'] ?? 0,
+                        'rain_probability' => $weather['rain_probability'] ?? 0,
+                        'uv_index' => $weather['uv_index'] ?? 0,
+                        'description' => $weather['description'] ?? '',
+                    ]
+                );
+            }
+
+            return ['weather', ['data' => [
+                'city' => $city,
+                'date' => $date,
+                'condition' => $weather['weather'] ?? '',
+                'temperature' => $weather['temperature_high'] ?? null,
+                'temperature_high' => $weather['temperature_high'] ?? null,
+                'temperature_low' => $weather['temperature_low'] ?? null,
+                'humidity' => $weather['humidity'] ?? null,
+                'rain_probability' => $weather['rain_probability'] ?? null,
+                'suggestion' => $weather['description'] ?? '',
+            ]]];
+        } catch (\Throwable $e) {
+            Log::error('Weather fetch failed in AI controller', ['error' => $e->getMessage()]);
+
+            return ['weather', ['data' => ['city' => $city, 'date' => $date]]];
+        }
     }
 
     /**

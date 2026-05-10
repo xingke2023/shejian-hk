@@ -74,6 +74,7 @@ class PurchaseOrderController extends Controller
     {
         $data = $request->validate([
             'date' => 'required|date_format:Y-m-d',
+            'store_id' => 'nullable|integer',
             'supplier_id' => 'nullable|integer|exists:suppliers,id',
             'notes' => 'nullable|string|max:500',
             'items' => 'required|array|min:1',
@@ -85,6 +86,10 @@ class PurchaseOrderController extends Controller
         $storeId = $request->user()->resolveStoreId();
         if (! $storeId) {
             return response()->json(['message' => '该账号未关联任何门店'], 403);
+        }
+
+        if (isset($data['store_id']) && (int) $data['store_id'] !== $storeId) {
+            return response()->json(['message' => '无权操作其他门店的单据'], 403);
         }
 
         $deliveryDate = $data['date'];

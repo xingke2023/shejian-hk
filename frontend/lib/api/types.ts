@@ -29,15 +29,17 @@ export interface AuthResponse {
 }
 
 export interface LoginCredentials {
-  email: string;
+  login: string;
   password: string;
 }
 
 export interface RegisterCredentials {
   name: string;
+  username: string;
   email: string;
   password: string;
   password_confirmation: string;
+  store_id: number;
 }
 
 export interface PaginatedResponse<T> {

@@ -24,7 +24,12 @@ class DailyOperations extends Page
 
     public string $date = '';
 
-    public string $storeId = '';
+    /** @var array<int> */
+    public array $selectedStoreIds = [];
+
+    public int $calendarYear = 0;
+
+    public int $calendarMonth = 0;
 
     #[Url]
     public string $activeFilter = 'sold';
@@ -36,6 +41,67 @@ class DailyOperations extends Page
     public function mount(): void
     {
         $this->date = today()->toDateString();
+        $this->calendarYear = (int) today()->year;
+        $this->calendarMonth = (int) today()->month;
+    }
+
+    public function prevMonth(): void
+    {
+        $d = \Carbon\Carbon::createFromDate($this->calendarYear, $this->calendarMonth, 1)->subMonth();
+        $this->calendarYear = $d->year;
+        $this->calendarMonth = $d->month;
+    }
+
+    public function nextMonth(): void
+    {
+        $d = \Carbon\Carbon::createFromDate($this->calendarYear, $this->calendarMonth, 1)->addMonth();
+        $this->calendarYear = $d->year;
+        $this->calendarMonth = $d->month;
+    }
+
+    public function selectDate(string $date): void
+    {
+        $this->date = $date;
+        $this->dispatch('date-selected');
+    }
+
+    /** 返回当前日历月的所有日期格（含前后补位），每个元素含 date/day/inMonth/isToday/isSelected */
+    public function getCalendarDays(): array
+    {
+        $firstDay = \Carbon\Carbon::createFromDate($this->calendarYear, $this->calendarMonth, 1);
+        $daysInMonth = $firstDay->daysInMonth;
+
+        // 周一为每周第一天，0=Mon ... 6=Sun
+        $startDow = ($firstDay->dayOfWeek + 6) % 7; // Carbon: 0=Sun, convert to Mon-based
+
+        $days = [];
+
+        // 前补位（上个月末尾几天）
+        for ($i = $startDow - 1; $i >= 0; $i--) {
+            $d = $firstDay->copy()->subDays($i + 1);
+            $days[] = ['date' => $d->toDateString(), 'day' => $d->day, 'inMonth' => false, 'isToday' => false, 'isSelected' => false];
+        }
+
+        // 本月
+        for ($i = 1; $i <= $daysInMonth; $i++) {
+            $d = \Carbon\Carbon::createFromDate($this->calendarYear, $this->calendarMonth, $i);
+            $days[] = [
+                'date' => $d->toDateString(),
+                'day' => $i,
+                'inMonth' => true,
+                'isToday' => $d->isToday(),
+                'isSelected' => $d->toDateString() === $this->date,
+            ];
+        }
+
+        // 后补位（凑满完整行）
+        $remaining = (7 - (count($days) % 7)) % 7;
+        for ($i = 1; $i <= $remaining; $i++) {
+            $d = $firstDay->copy()->addMonth()->startOfMonth()->addDays($i - 1);
+            $days[] = ['date' => $d->toDateString(), 'day' => $d->day, 'inMonth' => false, 'isToday' => false, 'isSelected' => false];
+        }
+
+        return $days;
     }
 
     public function setFilter(string $filter): void
@@ -45,15 +111,10 @@ class DailyOperations extends Page
         $this->filterLowStock = false;
     }
 
-    /** 门店选项（含"全部"） */
+    /** 门店列表 id => name */
     public function getStoreOptions(): array
     {
-        $options = ['' => '全部门店'];
-        Store::orderBy('id')->get(['id', 'name'])->each(function ($s) use (&$options) {
-            $options[(string) $s->id] = $s->name;
-        });
-
-        return $options;
+        return Store::orderBy('id')->pluck('name', 'id')->toArray();
     }
 
     public function getTitle(): string
@@ -61,10 +122,15 @@ class DailyOperations extends Page
         return '每日营运情况';
     }
 
+    public function getHeader(): ?\Illuminate\Contracts\View\View
+    {
+        return view('filament.pages.partials.daily-operations-header', ['page' => $this]);
+    }
+
     public function getData(): array
     {
         $date = $this->date ?: today()->toDateString();
-        $storeIds = $this->storeId !== '' ? [(int) $this->storeId] : Store::pluck('id')->toArray();
+        $storeIds = count($this->selectedStoreIds) > 0 ? $this->selectedStoreIds : Store::pluck('id')->toArray();
 
         // 当日快照（有交易的商品）
         $snapshots = InventoryDailySnapshot::with('product:id,name,unit,is_fresh')
@@ -161,7 +227,7 @@ class DailyOperations extends Page
     {
         $date = $this->date ?: today()->toDateString();
         $sourceLabels = [1 => 'AI', 2 => '手动', 3 => '后台'];
-        $storeIds = $this->storeId !== '' ? [(int) $this->storeId] : Store::pluck('id')->toArray();
+        $storeIds = count($this->selectedStoreIds) > 0 ? $this->selectedStoreIds : Store::pluck('id')->toArray();
 
         return DailyOperationLog::with(['product:id,name', 'store:id,name'])
             ->whereIn('store_id', $storeIds)

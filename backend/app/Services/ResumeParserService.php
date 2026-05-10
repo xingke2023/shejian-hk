@@ -13,13 +13,19 @@ class ResumeParserService
 
     private string $model;
 
+    private string $visionBaseUrl;
+
+    private string $visionApiKey;
+
     private string $visionModel;
 
     public function __construct()
     {
-        $this->baseUrl    = rtrim(config('ai.base_url'), '/');
-        $this->apiKey     = config('ai.api_key');
-        $this->model      = config('ai.model');
+        $this->baseUrl = rtrim(config('ai.base_url'), '/');
+        $this->apiKey = config('ai.api_key');
+        $this->model = config('ai.model');
+        $this->visionBaseUrl = rtrim(config('ai.vision_base_url'), '/');
+        $this->visionApiKey = config('ai.vision_api_key');
         $this->visionModel = config('ai.vision_model');
     }
 
@@ -56,7 +62,7 @@ PROMPT;
 
         if ($imageBase64) {
             $messages[] = [
-                'role'    => 'user',
+                'role' => 'user',
                 'content' => [
                     ['type' => 'text', 'text' => "请解析以下简历信息：\n{$text}"],
                     ['type' => 'image_url', 'image_url' => ['url' => "data:image/jpeg;base64,{$imageBase64}"]],
@@ -69,13 +75,17 @@ PROMPT;
         }
 
         try {
-            $response = Http::withToken($this->apiKey)
+            [$url, $key] = $imageBase64
+                ? ["{$this->visionBaseUrl}/chat/completions", $this->visionApiKey]
+                : ["{$this->baseUrl}/chat/completions", $this->apiKey];
+
+            $response = Http::withToken($key)
                 ->timeout(30)
-                ->post("{$this->baseUrl}/chat/completions", [
-                    'model'           => $model,
-                    'messages'        => array_merge([['role' => 'system', 'content' => $systemPrompt]], $messages),
+                ->post($url, [
+                    'model' => $model,
+                    'messages' => array_merge([['role' => 'system', 'content' => $systemPrompt]], $messages),
                     'response_format' => ['type' => 'json_object'],
-                    'temperature'     => 0.1,
+                    'temperature' => 0.1,
                 ]);
 
             $content = $response->json('choices.0.message.content', '{}');
@@ -109,13 +119,13 @@ PROMPT;
             $response = Http::withToken($this->apiKey)
                 ->timeout(20)
                 ->post("{$this->baseUrl}/chat/completions", [
-                    'model'           => $this->model,
-                    'messages'        => [
+                    'model' => $this->model,
+                    'messages' => [
                         ['role' => 'system', 'content' => $systemPrompt],
                         ['role' => 'user', 'content' => $query],
                     ],
                     'response_format' => ['type' => 'json_object'],
-                    'temperature'     => 0.1,
+                    'temperature' => 0.1,
                 ]);
 
             $content = $response->json('choices.0.message.content', '{}');
