@@ -4,7 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\SalesDailySummaryResource\Pages;
 use App\Models\SalesDailySummary;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -13,9 +13,9 @@ class SalesDailySummaryResource extends Resource
 {
     protected static ?string $model = SalesDailySummary::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-calendar-days';
 
-    protected static ?string $navigationGroup = '销售管理';
+    protected static string | \UnitEnum | null $navigationGroup = '销售管理';
 
     protected static ?string $navigationLabel = '每日销售留档';
 
@@ -25,9 +25,9 @@ class SalesDailySummaryResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form->schema([]);
+        return $schema->schema([]);
     }
 
     public static function table(Table $table): Table

@@ -11,7 +11,7 @@ class ListInventory extends ListRecords
 {
     protected static string $resource = InventoryResource::class;
 
-    protected static string $view = 'filament.resources.inventory.list';
+    protected string $view = 'filament.resources.inventory.list';
 
     public string $date = '';
 

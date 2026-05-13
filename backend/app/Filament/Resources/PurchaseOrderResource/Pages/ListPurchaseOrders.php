@@ -11,7 +11,7 @@ class ListPurchaseOrders extends ListRecords
 {
     protected static string $resource = PurchaseOrderResource::class;
 
-    protected static string $view = 'filament.resources.purchase-orders.list';
+    protected string $view = 'filament.resources.purchase-orders.list';
 
     public string $date = '';
 

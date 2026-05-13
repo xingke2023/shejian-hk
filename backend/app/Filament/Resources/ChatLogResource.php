@@ -5,9 +5,8 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\ChatLogResource\Pages;
 use App\Models\ChatLog;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Infolists;
-use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -16,11 +15,11 @@ class ChatLogResource extends Resource
 {
     protected static ?string $model = ChatLog::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-chat-bubble-left-right';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-chat-bubble-left-right';
 
     protected static ?string $navigationLabel = '对话日志';
 
-    protected static ?string $navigationGroup = '系统';
+    protected static string | \UnitEnum | null $navigationGroup = '系统';
 
     protected static ?string $modelLabel = '对话日志';
 
@@ -28,7 +27,7 @@ class ChatLogResource extends Resource
 
     protected static ?int $navigationSort = 10;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
         return $form
             ->schema([
@@ -117,7 +116,7 @@ class ChatLogResource extends Resource
             ]);
     }
 
-    public static function infolist(Infolist $infolist): Infolist
+    public static function infolist(Schema $schema): Schema
     {
         return $infolist
             ->schema([

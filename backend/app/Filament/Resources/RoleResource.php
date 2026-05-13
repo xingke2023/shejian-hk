@@ -6,7 +6,7 @@ use App\Filament\Resources\RoleResource\Pages;
 use App\Models\Permission;
 use App\Models\Role;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -15,9 +15,9 @@ class RoleResource extends Resource
 {
     protected static ?string $model = Role::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-shield-check';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shield-check';
 
-    protected static ?string $navigationGroup = '系统管理';
+    protected static string | \UnitEnum | null $navigationGroup = '系统管理';
 
     protected static ?string $navigationLabel = '角色权限';
 
@@ -41,7 +41,7 @@ class RoleResource extends Resource
         'roles' => '🔑 角色权限',
     ];
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
         $permsByModule = Permission::query()
             ->orderBy('module')

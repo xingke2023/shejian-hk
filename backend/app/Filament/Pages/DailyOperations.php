@@ -12,13 +12,13 @@ use Livewire\Attributes\Url;
 
 class DailyOperations extends Page
 {
-    protected static string $view = 'filament.pages.daily-operations';
+    protected string $view = 'filament.pages.daily-operations';
 
-    protected static ?string $navigationGroup = '销售管理';
+    protected static string | \UnitEnum | null $navigationGroup = '销售管理';
 
     protected static ?string $navigationLabel = '每日营运情况';
 
-    protected static ?string $navigationIcon = 'heroicon-o-chart-bar-square';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-chart-bar-square';
 
     protected static ?int $navigationSort = 0;
 

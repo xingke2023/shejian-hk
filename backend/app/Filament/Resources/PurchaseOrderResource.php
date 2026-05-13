@@ -12,7 +12,7 @@ use App\Models\PurchaseOrder;
 use App\Models\Store;
 use App\Models\Supplier;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Notifications\Notification;
@@ -25,9 +25,9 @@ class PurchaseOrderResource extends Resource
 {
     protected static ?string $model = PurchaseOrder::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
-    protected static ?string $navigationGroup = '销售管理';
+    protected static string | \UnitEnum | null $navigationGroup = '销售管理';
 
     protected static ?string $navigationLabel = '到货单';
 
@@ -37,7 +37,7 @@ class PurchaseOrderResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
         return $form
             ->schema([

@@ -15,13 +15,13 @@ class SalesUploadPage extends Page
 {
     use WithFileUploads;
 
-    protected static string $view = 'filament.pages.sales-upload';
+    protected string $view = 'filament.pages.sales-upload';
 
-    protected static ?string $navigationGroup = '销售管理';
+    protected static string | \UnitEnum | null $navigationGroup = '销售管理';
 
     protected static ?string $navigationLabel = '销售流水导入';
 
-    protected static ?string $navigationIcon = 'heroicon-o-arrow-up-tray';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-arrow-up-tray';
 
     protected static ?int $navigationSort = 5;
 

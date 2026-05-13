@@ -10,7 +10,7 @@ use App\Models\SalesOrder;
 use App\Models\Store;
 use App\Models\User;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Notifications\Notification;
@@ -24,9 +24,9 @@ class SalesOrderResource extends Resource
 {
     protected static ?string $model = SalesOrder::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shopping-cart';
 
-    protected static ?string $navigationGroup = '销售管理';
+    protected static string | \UnitEnum | null $navigationGroup = '销售管理';
 
     protected static ?string $navigationLabel = '零售流水';
 
@@ -34,7 +34,7 @@ class SalesOrderResource extends Resource
 
     protected static bool $shouldRegisterNavigation = false;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
         return $form
             ->schema([

@@ -7,7 +7,7 @@ use App\Models\Role;
 use App\Models\Store;
 use App\Models\User;
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -17,9 +17,9 @@ class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-users';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-users';
 
-    protected static ?string $navigationGroup = '系统管理';
+    protected static string | \UnitEnum | null $navigationGroup = '系统管理';
 
     protected static ?string $navigationLabel = '用户管理';
 
@@ -27,7 +27,7 @@ class UserResource extends Resource
 
     protected static ?int $navigationSort = 11;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
         return $form
             ->schema([

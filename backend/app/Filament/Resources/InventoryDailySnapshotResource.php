@@ -4,7 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\InventoryDailySnapshotResource\Pages;
 use App\Models\InventoryDailySnapshot;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -13,9 +13,9 @@ class InventoryDailySnapshotResource extends Resource
 {
     protected static ?string $model = InventoryDailySnapshot::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
-    protected static ?string $navigationGroup = '库存管理';
+    protected static string | \UnitEnum | null $navigationGroup = '库存管理';
 
     protected static ?string $navigationLabel = '每日库存留档';
 
@@ -25,9 +25,9 @@ class InventoryDailySnapshotResource extends Resource
 
     protected static ?int $navigationSort = 5;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form->schema([]);
+        return $schema->schema([]);
     }
 
     public static function table(Table $table): Table

@@ -11,7 +11,7 @@ class ListSalesOrders extends ListRecords
 {
     protected static string $resource = SalesOrderResource::class;
 
-    protected static string $view = 'filament.resources.sales-orders.list';
+    protected string $view = 'filament.resources.sales-orders.list';
 
     protected ?string $heading = '每日营运情况';
 

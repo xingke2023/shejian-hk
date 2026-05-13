@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\SupplierResource\RelationManagers;
 
 use Filament\Forms;
-use Filament\Forms\Form;
+use Filament\Schemas\Schema;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -14,9 +14,9 @@ class SupplierProductsRelationManager extends RelationManager
 
     protected static ?string $title = '供货商品';
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form
+        return $schema
             ->schema([
                 Forms\Components\Select::make('product_id')
                     ->label('商品')
