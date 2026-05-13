@@ -11,11 +11,15 @@ use App\Models\InventoryDailySnapshot;
 use App\Models\InventoryTransaction;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
 use App\Models\SalesDailySummary;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderItem;
+use App\Models\DamageRecord;
+use App\Models\SupplierRefundClaim;
 use App\Models\WeatherLog;
 use App\Services\AiService;
+use App\Services\SuggestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +30,10 @@ use Illuminate\Support\Str;
 
 class AiAssistantController extends Controller
 {
-    public function __construct(private readonly AiService $aiService) {}
+    public function __construct(
+        private readonly AiService $aiService,
+        private readonly SuggestionService $suggestionService,
+    ) {}
 
     /**
      * 接收文字或图片输入，AI解析后写入库存。
@@ -41,7 +48,7 @@ class AiAssistantController extends Controller
 
         $startTime = microtime(true);
 
-        $text = $request->input('text', '');
+        $text = $request->input('text') ?? '';
         $imageBase64 = $request->input('image_base64');
 
         // 确定输入类型
@@ -86,7 +93,7 @@ class AiAssistantController extends Controller
         // 分发到库存
         $operations = [];
         $intent = $parsed['intent'] ?? 'other';
-        $queryIntents = ['inventory_query', 'sales_today_query', 'daily_overview_query', 'purchase_orders_query', 'daily_logs_query', 'weather_query'];
+        $queryIntents = ['inventory_query', 'sales_today_query', 'daily_overview_query', 'purchase_orders_query', 'daily_logs_query', 'weather_query', 'refund_claims_query', 'suggestions_query', 'product_query'];
         $isQuery = in_array($intent, $queryIntents);
         $isOp = ! in_array($intent, ['other', ...$queryIntents]);
 
@@ -95,7 +102,7 @@ class AiAssistantController extends Controller
         $cardData = null;
         if ($isQuery) {
             $date = $parsed['date'] ?? now()->toDateString();
-            [$cardType, $cardData] = $this->fetchQueryData($intent, $session->store_id, $date);
+            [$cardType, $cardData] = $this->fetchQueryData($intent, $session->store_id, $date, $parsed['items'] ?? []);
         }
 
         if ($isOp && ! empty($parsed['items'])) {
@@ -206,7 +213,7 @@ class AiAssistantController extends Controller
 
         $operations = [];
         $intent = $parsed['intent'] ?? 'other';
-        $queryIntents = ['inventory_query', 'sales_today_query', 'daily_overview_query', 'purchase_orders_query', 'daily_logs_query', 'weather_query'];
+        $queryIntents = ['inventory_query', 'sales_today_query', 'daily_overview_query', 'purchase_orders_query', 'daily_logs_query', 'weather_query', 'refund_claims_query', 'suggestions_query', 'product_query'];
         $isQuery = in_array($intent, $queryIntents);
         $isOp = ! in_array($intent, ['other', ...$queryIntents]);
 
@@ -214,7 +221,7 @@ class AiAssistantController extends Controller
         $cardData = null;
         if ($isQuery) {
             $date = $parsed['date'] ?? now()->toDateString();
-            [$cardType, $cardData] = $this->fetchQueryData($intent, $session->store_id, $date);
+            [$cardType, $cardData] = $this->fetchQueryData($intent, $session->store_id, $date, $parsed['items'] ?? []);
         }
 
         if ($isOp && ! empty($parsed['items'])) {
@@ -299,6 +306,7 @@ class AiAssistantController extends Controller
     private function dispatchToInventory(array $items, int $storeId, int $operatorId, int $messageId): array
     {
         $operations = [];
+        $purchaseOrder = null; // 同一批进货共用一张进货单
 
         foreach ($items as $item) {
             $productName = $item['product_name'] ?? '';
@@ -310,7 +318,22 @@ class AiAssistantController extends Controller
                 continue;
             }
 
-            DB::transaction(function () use ($productName, $qty, $unit, $action, $storeId, $operatorId, $messageId, &$operations): void {
+            // 有进货项时先建进货单（仅建一次）
+            if ($action === 'in' && $purchaseOrder === null) {
+                $purchaseOrder = PurchaseOrder::create([
+                    'store_id' => $storeId,
+                    'order_no' => PurchaseOrder::generateOrderNo($storeId),
+                    'order_type' => 1,
+                    'status' => 5,
+                    'actual_delivery_date' => now()->toDateString(),
+                    'expected_delivery_date' => now()->toDateString(),
+                    'total_amount' => 0,
+                    'notes' => 'AI录入',
+                    'created_by' => $operatorId,
+                ]);
+            }
+
+            DB::transaction(function () use ($productName, $qty, $unit, $action, $storeId, $operatorId, $messageId, $purchaseOrder, &$operations): void {
                 $product = Product::findOrCreateByName($productName);
 
                 // 更新商品单位（如有新信息）
@@ -378,14 +401,50 @@ class AiAssistantController extends Controller
                     'qty_change' => $qtyChange,
                     'qty_before' => $qtyBefore,
                     'qty_after' => $newQty,
-                    'reference_type' => 'ai_message',
-                    'reference_id' => $messageId,
+                    'reference_type' => $action === 'in' && $purchaseOrder ? 'purchase_order' : 'ai_message',
+                    'reference_id' => $action === 'in' && $purchaseOrder ? $purchaseOrder->id : $messageId,
                     'operator_id' => $operatorId,
                     'notes' => $action === 'sold_out'
                         ? "{$productName} AI标记售罄"
                         : "{$productName} {$qty}{$unit} AI录入",
                     'created_at' => $now,
                 ]);
+
+                // 进货：写进货单明细
+                if ($action === 'in' && $purchaseOrder) {
+                    PurchaseOrderItem::create([
+                        'purchase_order_id' => $purchaseOrder->id,
+                        'product_id' => $product->id,
+                        'ordered_qty' => $qty,
+                        'received_qty' => $qty,
+                        'unit_price' => 0,
+                        'total_price' => 0,
+                    ]);
+                }
+
+                // 损耗：建损耗记录（自动关联最近一笔进货单/供应商）
+                if ($action === 'out') {
+                    $reason = $item['reason'] ?? '变质';
+                    $poItem = \App\Models\PurchaseOrderItem::whereHas('purchaseOrder', fn ($q) => $q->where('store_id', $storeId)->where('status', 5))
+                        ->where('product_id', $product->id)
+                        ->orderByDesc('id')
+                        ->first();
+
+                    DamageRecord::create([
+                        'store_id' => $storeId,
+                        'product_id' => $product->id,
+                        'purchase_order_item_id' => $poItem?->id,
+                        'supplier_id' => $poItem?->supplier_id ?? $poItem?->purchaseOrder?->supplier_id,
+                        'qty' => $qty,
+                        'unit_cost' => $poItem?->unit_price ? (float) $poItem->unit_price : null,
+                        'total_claimed' => $poItem?->unit_price ? round($qty * (float) $poItem->unit_price, 2) : null,
+                        'reason' => $reason,
+                        'status' => 1,
+                        'occurred_at' => $now,
+                        'operator_id' => $operatorId,
+                        'notes' => 'AI录入',
+                    ]);
+                }
 
                 // 销售出货 / 售罄：建补录销售单 + 更新每日汇总
                 if ($action === 'sell' || $action === 'sold_out') {
@@ -445,7 +504,7 @@ class AiAssistantController extends Controller
     /**
      * 根据查询意图从 DB 取数据，返回 [card_type, card_data]。
      */
-    private function fetchQueryData(string $intent, int $storeId, string $date): array
+    private function fetchQueryData(string $intent, int $storeId, string $date, array $parsedItems = []): array
     {
         return match ($intent) {
             'inventory_query' => [
@@ -497,7 +556,7 @@ class AiAssistantController extends Controller
                 'purchase_orders',
                 ['data' => PurchaseOrder::with('items.product')
                     ->where('store_id', $storeId)
-                    ->where('date', $date)
+                    ->whereDate('actual_delivery_date', $date)
                     ->latest()
                     ->get()],
             ],
@@ -517,6 +576,120 @@ class AiAssistantController extends Controller
             ],
 
             'weather_query' => $this->fetchWeatherData($date, $storeId),
+
+            'refund_claims_query' => [
+                'refund_claims',
+                ['data' => SupplierRefundClaim::with('supplier:id,name')
+                    ->where('store_id', $storeId)
+                    ->orderByDesc('created_at')
+                    ->limit(20)
+                    ->get()
+                    ->map(fn ($c) => [
+                        'id' => $c->id,
+                        'claim_no' => $c->claim_no,
+                        'supplier_name' => $c->supplier?->name,
+                        'status' => $c->status,
+                        'total_items' => $c->total_items,
+                        'total_qty' => $c->total_qty,
+                        'total_amount' => $c->total_amount,
+                        'created_at' => $c->created_at,
+                    ])->values()],
+            ],
+
+            'suggestions_query' => [
+                'suggestions',
+                ['data' => $this->suggestionService->generate($storeId)],
+            ],
+
+            'product_query' => (function () use ($storeId, $date, $parsedItems): array {
+                $productName = $parsedItems[0]['product_name'] ?? null;
+                if (! $productName) {
+                    return [null, null];
+                }
+
+                $product = Product::where('name', 'like', "%{$productName}%")->first();
+                if (! $product) {
+                    return ['product_detail', ['error' => "找不到商品：{$productName}"]];
+                }
+
+                $inventory = Inventory::where('store_id', $storeId)
+                    ->where('product_id', $product->id)
+                    ->first();
+
+                $snapshot = InventoryDailySnapshot::where('store_id', $storeId)
+                    ->where('product_id', $product->id)
+                    ->where('date', $date)
+                    ->first();
+
+                $recentSales = SalesDailySummary::where('store_id', $storeId)
+                    ->where('product_id', $product->id)
+                    ->orderByDesc('date')
+                    ->limit(7)
+                    ->get()
+                    ->map(fn ($s) => [
+                        'date' => $s->date,
+                        'sales_qty' => $s->sales_qty,
+                        'sales_amount' => $s->sales_amount,
+                        'avg_price' => $s->avg_price,
+                    ])->values();
+
+                $recentPurchases = PurchaseOrderItem::with('order:id,date,status,order_no')
+                    ->where('product_id', $product->id)
+                    ->whereHas('order', fn ($q) => $q->where('store_id', $storeId)->where('status', 3))
+                    ->orderByDesc('created_at')
+                    ->limit(10)
+                    ->get()
+                    ->map(fn ($p) => [
+                        'order_id' => $p->order?->id,
+                        'order_no' => $p->order?->order_no,
+                        'date' => $p->order?->date,
+                        'qty' => $p->ordered_qty,
+                        'unit_price' => $p->unit_price,
+                    ])->values();
+
+                $recentSalesOrders = SalesOrderItem::with('order:id,order_no,sold_at,payment_method,status')
+                    ->where('product_id', $product->id)
+                    ->whereHas('order', fn ($q) => $q->where('store_id', $storeId)->where('status', 1))
+                    ->orderByDesc('created_at')
+                    ->limit(10)
+                    ->get()
+                    ->map(fn ($i) => [
+                        'order_no' => $i->order?->order_no,
+                        'sold_at' => $i->order?->sold_at,
+                        'qty' => $i->qty,
+                        'unit_price' => $i->unit_price,
+                        'subtotal' => $i->subtotal,
+                    ])->values();
+
+                $recentDamage = DamageRecord::where('store_id', $storeId)
+                    ->where('product_id', $product->id)
+                    ->orderByDesc('occurred_at')
+                    ->limit(5)
+                    ->get()
+                    ->map(fn ($d) => [
+                        'date' => $d->occurred_at?->toDateString(),
+                        'qty' => $d->qty,
+                        'reason' => $d->reason,
+                    ])->values();
+
+                return ['product_detail', ['data' => [
+                    'product' => ['id' => $product->id, 'name' => $product->name, 'unit' => $product->unit, 'is_fresh' => $product->is_fresh],
+                    'current_qty' => $inventory?->current_qty ?? 0,
+                    'last_sold_at' => $inventory?->last_sold_at,
+                    'today' => $snapshot ? [
+                        'opening_qty' => $snapshot->opening_qty,
+                        'received_qty' => $snapshot->received_qty,
+                        'sold_qty' => $snapshot->sold_qty,
+                        'damage_qty' => $snapshot->damage_qty,
+                        'closing_qty' => $snapshot->closing_qty,
+                        'sold_out_at' => $snapshot->sold_out_at,
+                    ] : null,
+                    'recent_sales' => $recentSales,
+                    'recent_sales_orders' => $recentSalesOrders,
+                    'recent_purchases' => $recentPurchases,
+                    'recent_damage' => $recentDamage,
+                ]]];
+            })(),
 
             default => [null, null],
         };

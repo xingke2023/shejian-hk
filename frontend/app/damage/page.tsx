@@ -36,7 +36,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 // ─── Tab: 损耗录入 ────────────────────────────────────────────────────────────
@@ -710,7 +711,7 @@ export default function DamagePage() {
   ]
 
   return (
-    <div className="min-h-screen bg-[#f5f4f0] max-w-2xl mx-auto">
+    <div className="min-h-screen bg-[#f5f4f0] max-w-2xl mx-auto pb-24">
       {/* Header */}
       <div className="bg-white px-4 py-3 flex items-center justify-between shadow-[0_1px_0_0_#e5e3dc] sticky top-0 z-10">
         <div className="flex items-center gap-2.5">

@@ -47,11 +47,11 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-24">
       {/* 顶部导航 */}
       <div className="bg-white border-b px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <h1 className="text-lg font-semibold text-gray-800">库存管理</h1>
-        <a href="/assistant" className="text-sm text-blue-600 hover:underline">AI助手 →</a>
+        <a href="/manage" className="text-sm text-[#941100] hover:underline font-medium">AI助手 →</a>
       </div>
 
       {/* Tab 切换 */}

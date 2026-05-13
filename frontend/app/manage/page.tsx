@@ -13,7 +13,7 @@ import { damageApi } from '@/lib/api/damage'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type QuickAction = 'inventory' | 'sales_today' | 'daily_overview' | 'purchase_orders' | 'weather' | 'daily_logs' | 'sales_report' | 'suggestions' | 'damage_stats'
+type QuickAction = 'inventory' | 'sales_today' | 'daily_overview' | 'purchase_orders' | 'weather' | 'daily_logs' | 'sales_report' | 'suggestions' | 'damage_stats' | 'product_detail'
 type WriteAction = 'purchase_entry' | 'sales_supplement' | 'damage_entry'
 
 interface ChatMessage {
@@ -31,7 +31,8 @@ interface ChatMessage {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 
@@ -608,6 +609,140 @@ function DamageStatsCard({ data }: { data: any }) {
   )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ProductDetailCard({ data }: { data: any }) {
+  const inner = data?.data ?? data ?? {}
+  if (data?.error) return <p className="text-red-400 text-xs py-2">{data.error}</p>
+
+  const product = inner.product ?? {}
+  const today = inner.today
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recentSales: any[] = inner.recent_sales ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recentSalesOrders: any[] = inner.recent_sales_orders ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recentPurchases: any[] = inner.recent_purchases ?? []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recentDamage: any[] = inner.recent_damage ?? []
+
+  const qty = Number(inner.current_qty ?? 0)
+  const qtyColor = qty === 0 ? 'text-red-500' : qty < 5 ? 'text-amber-500' : 'text-emerald-600'
+  const qtyBg   = qty === 0 ? 'bg-red-50'    : qty < 5 ? 'bg-amber-50'    : 'bg-emerald-50'
+
+  return (
+    <div className="space-y-3">
+      {/* 商品概况 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-base font-bold text-gray-800">{product.name ?? '-'}</span>
+          {product.is_fresh && <span className="ml-1.5 text-[10px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full">生鲜</span>}
+          <p className="text-xs text-gray-400 mt-0.5">
+            {inner.last_sold_at ? `最后销售 ${new Date(inner.last_sold_at).toLocaleDateString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}` : '暂无销售记录'}
+          </p>
+        </div>
+        <div className={`text-center px-4 py-2 rounded-2xl ${qtyBg}`}>
+          <div className={`text-2xl font-bold tabular-nums ${qtyColor}`}>{qty}</div>
+          <div className="text-[10px] text-gray-400">{product.unit ?? '斤'} / 当前库存</div>
+        </div>
+      </div>
+
+      {/* 今日快照 */}
+      {today && (
+        <div className="bg-gray-50 rounded-2xl p-3">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">今日</p>
+          <div className="grid grid-cols-4 gap-1 text-center">
+            {[
+              { label: '开盘', val: today.opening_qty },
+              { label: '进货', val: `+${today.received_qty}`, cls: 'text-blue-500' },
+              { label: '已售', val: `-${today.sold_qty}`, cls: 'text-orange-500' },
+              { label: '结余', val: today.closing_qty, cls: 'font-bold' },
+            ].map(({ label, val, cls = '' }) => (
+              <div key={label}>
+                <div className={`text-sm tabular-nums ${cls}`}>{val}</div>
+                <div className="text-[10px] text-gray-400">{label}</div>
+              </div>
+            ))}
+          </div>
+          {today.sold_out_at && (
+            <p className="text-[10px] text-red-400 text-center mt-1.5 font-medium">
+              已于 {new Date(today.sold_out_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})} 售罄
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 近7天销售 */}
+      {recentSales.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">近期销售</p>
+          <div className="space-y-1">
+            {recentSales.map((s, i) => (
+              <div key={i} className="flex justify-between items-center text-xs bg-gray-50 rounded-xl px-3 py-2">
+                <span className="text-gray-500">{s.date}</span>
+                <span className="tabular-nums text-orange-500 font-semibold">{s.sales_qty}{product.unit}</span>
+                {s.sales_amount > 0 && <span className="tabular-nums text-gray-400">¥{Number(s.sales_amount).toFixed(2)}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 近期销售流水 */}
+      {recentSalesOrders.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">销售流水（近10笔）</p>
+          <div className="space-y-1">
+            {recentSalesOrders.map((s, i) => (
+              <div key={i} className="flex justify-between items-center text-xs bg-orange-50 rounded-xl px-3 py-2">
+                <span className="text-gray-400 tabular-nums">{s.sold_at ? new Date(s.sold_at).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'}) : '-'}</span>
+                <span className="tabular-nums text-orange-600 font-semibold">{s.qty}{product.unit}</span>
+                {s.unit_price && <span className="tabular-nums text-gray-400">¥{Number(s.unit_price).toFixed(2)}/斤</span>}
+                {s.subtotal > 0 && <span className="tabular-nums text-gray-500 font-medium">¥{Number(s.subtotal).toFixed(2)}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 近期进货单 */}
+      {recentPurchases.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">进货单（近10条）</p>
+          <div className="space-y-1">
+            {recentPurchases.map((p, i) => (
+              <div key={i} className="flex justify-between items-center text-xs bg-blue-50 rounded-xl px-3 py-2">
+                <span className="text-gray-500">{p.date}</span>
+                <span className="tabular-nums text-blue-600 font-semibold">+{p.qty}{product.unit}</span>
+                {p.unit_price && <span className="tabular-nums text-gray-400">¥{Number(p.unit_price).toFixed(2)}/斤</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 近期损耗 */}
+      {recentDamage.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">近期损耗</p>
+          <div className="space-y-1">
+            {recentDamage.map((d, i) => (
+              <div key={i} className="flex justify-between items-center text-xs bg-red-50 rounded-xl px-3 py-2">
+                <span className="text-gray-500">{d.date}</span>
+                <span className="tabular-nums text-red-500 font-semibold">-{d.qty}{product.unit}</span>
+                <span className="text-gray-400">{d.reason}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!today && recentSales.length === 0 && recentPurchases.length === 0 && (
+        <p className="text-gray-300 text-xs text-center py-4">暂无历史数据</p>
+      )}
+    </div>
+  )
+}
+
 function CardRenderer({ type, data }: { type: QuickAction; data: unknown }) {
   switch (type) {
     case 'inventory':       return <InventoryCard data={data} />
@@ -619,6 +754,7 @@ function CardRenderer({ type, data }: { type: QuickAction; data: unknown }) {
     case 'sales_report':    return <SalesReportCard data={data} />
     case 'suggestions':     return <SuggestionsCard data={data} />
     case 'damage_stats':    return <DamageStatsCard data={data} />
+    case 'product_detail':  return <ProductDetailCard data={data} />
   }
 }
 
@@ -652,6 +788,7 @@ const CARD_TITLES: Record<QuickAction, string> = {
   sales_report:    '📈 每日销售报表',
   suggestions:     '💡 进货 & 促销建议',
   damage_stats:    '⚠️ 损耗统计',
+  product_detail:  '🔍 商品详情',
 }
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
@@ -680,6 +817,8 @@ export default function ManagePage() {
   const [interimText, setInterimText] = useState('')
 
   const [activeForm, setActiveForm] = useState<WriteAction | null>(null)
+  const [bottomTab, setBottomTab] = useState<'query' | 'write' | null>(null)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [purchaseItems, setPurchaseItems] = useState([{ name: '', qty: '', unit: '斤', price: '' }])
   const [suppProduct, setSuppProduct] = useState('')
   const [suppType, setSuppType] = useState<'sold_out' | 'remaining' | 'qty'>('sold_out')
@@ -925,7 +1064,7 @@ export default function ManagePage() {
     return (
       <div className="flex items-center justify-center h-screen bg-[#f5f4f0]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center text-2xl shadow-lg">🍜</div>
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#941100] to-[#FF9300] flex items-center justify-center text-2xl shadow-lg">🍜</div>
           <p className="text-gray-400 text-sm">加载中...</p>
         </div>
       </div>
@@ -936,31 +1075,84 @@ export default function ManagePage() {
     <div className="flex flex-col h-screen bg-[#f5f4f0] max-w-2xl mx-auto">
 
       {/* ── Header ── */}
-      <div className="bg-white px-4 py-3 flex items-center justify-between shrink-0 shadow-[0_1px_0_0_#e5e3dc]">
-        <div className="flex items-center gap-2.5">
+      <div className="bg-gradient-to-r from-[#941100] to-[#c0392b] px-4 py-3 flex items-center justify-between shrink-0 relative">
+        <div className="flex items-center">
           <div>
-            <div className="text-sm font-bold text-gray-800 leading-tight">舌尖香港</div>
-            <div className="text-[10px] text-gray-400 leading-tight">AI门店助手</div>
+            <div className="text-xl font-light text-white leading-tight tracking-wide">舌尖香港</div>
+            <div className="text-[10px] text-white/70 leading-tight">AI门店助手</div>
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs">
           {user && (
-            <span className="text-gray-500 hidden sm:flex items-center gap-1.5 bg-gray-50 rounded-full px-3 py-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+            <span className="text-white/80 hidden sm:flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 inline-block" />
               {(user as { name?: string; username?: string }).name ?? (user as { name?: string; username?: string }).username}
             </span>
           )}
-          <a href="/inventory" className="text-orange-500 hover:text-orange-600 hidden sm:inline font-medium px-2 py-1 rounded-lg hover:bg-orange-50 transition-colors">库存</a>
-          <a href="/sales-report" className="text-orange-500 hover:text-orange-600 hidden sm:inline font-medium px-2 py-1 rounded-lg hover:bg-orange-50 transition-colors">销售报表</a>
-          <a href="/damage" className="text-red-500 hover:text-red-600 hidden sm:inline font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">损耗管理</a>
-          <a href="/assistant" className="text-orange-500 hover:text-orange-600 hidden sm:inline font-medium px-2 py-1 rounded-lg hover:bg-orange-50 transition-colors">AI助手</a>
+          {/* 桌面端导航链接 */}
+          <a href="/" className="text-white/80 hover:text-white hidden sm:inline font-medium px-2 py-1 rounded-lg hover:bg-white/10 transition-colors">首页</a>
+          <a href="/inventory" className="text-white/80 hover:text-white hidden sm:inline font-medium px-2 py-1 rounded-lg hover:bg-white/10 transition-colors">库存</a>
+          <a href="/sales-report" className="text-white/80 hover:text-white hidden sm:inline font-medium px-2 py-1 rounded-lg hover:bg-white/10 transition-colors">报表</a>
+          <a href="/damage" className="text-white/80 hover:text-white hidden sm:inline font-medium px-2 py-1 rounded-lg hover:bg-white/10 transition-colors">损耗</a>
           <button
             onClick={() => logout().then(() => router.push('/login'))}
-            className="text-gray-400 hover:text-red-500 transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
+            className="text-white/60 hover:text-white hidden sm:inline transition-colors px-2 py-1 rounded-lg hover:bg-white/10"
           >
             退出
           </button>
+          {/* 手机端汉堡菜单按钮 */}
+          <button
+            onClick={() => setShowMobileMenu(m => !m)}
+            className="sm:hidden flex flex-col gap-[5px] p-2 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label="菜单"
+          >
+            <span className={`block w-5 h-0.5 bg-white transition-all ${showMobileMenu ? 'rotate-45 translate-y-[7px]' : ''}`} />
+            <span className={`block w-5 h-0.5 bg-white transition-all ${showMobileMenu ? 'opacity-0' : ''}`} />
+            <span className={`block w-5 h-0.5 bg-white transition-all ${showMobileMenu ? '-rotate-45 -translate-y-[7px]' : ''}`} />
+          </button>
         </div>
+
+        {/* 手机端下拉导航菜单 */}
+        {showMobileMenu && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setShowMobileMenu(false)} />
+            <div className="sm:hidden absolute top-full left-0 right-0 z-30 bg-gradient-to-b from-[#941100] to-[#7a0e00] border-t border-white/10 shadow-xl animate-slide-up">
+              {user && (
+                <div className="px-4 py-2.5 border-b border-white/10 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                  <span className="text-sm text-white/80">
+                    {(user as { name?: string; username?: string }).name ?? (user as { name?: string; username?: string }).username}
+                  </span>
+                </div>
+              )}
+              <div className="grid grid-cols-4 gap-1 p-3">
+                {[
+                  { label: '首页',   href: '/',            icon: '🏠' },
+                  { label: '库存',   href: '/inventory',   icon: '📦' },
+                  { label: '报表',   href: '/sales-report',icon: '📈' },
+                  { label: '损耗',   href: '/damage',      icon: '⚠️' },
+                ].map(item => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className="flex flex-col items-center gap-1.5 py-3 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors text-white"
+                  >
+                    <span className="text-2xl">{item.icon}</span>
+                    <span className="text-xs font-medium">{item.label}</span>
+                  </a>
+                ))}
+              </div>
+              <div className="px-3 pb-3 border-t border-white/10 pt-2">
+                <button
+                  onClick={() => logout().then(() => router.push('/login'))}
+                  className="w-full py-2 text-sm text-white/50 hover:text-white text-center rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  退出登录
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Messages ── */}
@@ -969,7 +1161,7 @@ export default function ManagePage() {
           <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
 
             {msg.role === 'system' && (
-              <div className="w-8 h-8 rounded-2xl bg-orange-500 flex items-center justify-center text-white text-[10px] font-bold mr-2.5 shrink-0 mt-1 shadow-sm">
+              <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-[#941100] to-[#FF9300] flex items-center justify-center text-white text-[10px] font-bold mr-2.5 shrink-0 mt-1 shadow-sm">
                 AI
               </div>
             )}
@@ -982,7 +1174,7 @@ export default function ManagePage() {
 
               <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-line shadow-sm ${
                 msg.role === 'user'
-                  ? 'bg-stone-800 text-white rounded-br-md'
+                  ? 'bg-[#941100] text-white rounded-br-md'
                   : 'bg-white text-gray-700 rounded-bl-md border border-stone-100'
               }`}>
                 {msg.text}
@@ -1034,7 +1226,7 @@ export default function ManagePage() {
 
         {isSending && (
           <div className="flex justify-start">
-            <div className="w-8 h-8 rounded-2xl bg-orange-500 flex items-center justify-center text-white text-[10px] font-bold mr-2.5 shrink-0 shadow-sm">
+            <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-[#941100] to-[#FF9300] flex items-center justify-center text-white text-[10px] font-bold mr-2.5 shrink-0 shadow-sm">
               AI
             </div>
             <div className="bg-white shadow-sm border border-stone-100 px-5 py-3.5 rounded-2xl rounded-bl-md">
@@ -1060,7 +1252,7 @@ export default function ManagePage() {
       )}
 
       {/* ── Bottom area ── */}
-      <div className="bg-white border-t border-gray-100 shrink-0">
+      <div className="bg-white border-t border-gray-100 shrink-0 relative">
         {!isAuthenticated ? (
           <div>
             <div className="flex items-end gap-2 px-4 py-3">
@@ -1075,7 +1267,7 @@ export default function ManagePage() {
               <button
                 onClick={handleSend}
                 disabled={isSending || !inputText.trim()}
-                className="w-10 h-10 flex items-center justify-center rounded-2xl bg-orange-500 hover:bg-orange-600 disabled:bg-stone-200 text-white shrink-0 transition-colors font-bold text-base shadow-sm disabled:shadow-none"
+                className="w-10 h-10 flex items-center justify-center rounded-2xl bg-[#941100] hover:bg-[#7a0e00] disabled:bg-stone-200 text-white shrink-0 transition-colors font-bold text-base shadow-sm disabled:shadow-none"
               >
                 {isSending ? '…' : '↑'}
               </button>
@@ -1103,7 +1295,7 @@ export default function ManagePage() {
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="shrink-0 bg-orange-500 hover:bg-orange-600 disabled:bg-stone-200 text-white rounded-xl px-4 py-2 text-sm font-semibold transition-colors shadow-sm"
+                  className="shrink-0 bg-[#941100] hover:bg-[#7a0e00] disabled:bg-stone-200 text-white rounded-xl px-4 py-2 text-sm font-semibold transition-colors shadow-sm"
                 >
                   {loginLoading ? '…' : '登录'}
                 </button>
@@ -1112,35 +1304,95 @@ export default function ManagePage() {
           </div>
         ) : (
           <>
-            {/* All actions in one scrollable row */}
-            <div className="px-4 pt-3 pb-2 flex gap-2 overflow-x-auto scrollbar-hide">
-              {QUICK_ACTIONS.map(({ emoji, label, action }) => (
-                <button
-                  key={action}
-                  onClick={() => { setActiveForm(null); handleQuickAction(action) }}
-                  disabled={isSending}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 disabled:opacity-40 rounded-full text-xs text-gray-600 font-medium transition-colors"
-                >
-                  <span className="text-sm">{emoji}</span>
-                  <span>{label}</span>
-                </button>
-              ))}
-              <div className="w-px bg-gray-200 shrink-0 mx-1 self-stretch" />
-              {WRITE_ACTIONS.map(({ emoji, label, action }) => (
-                <button
-                  key={action}
-                  onClick={() => openWriteForm(action)}
-                  disabled={isSending}
-                  className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                    activeForm === action
-                      ? 'bg-orange-500 text-white shadow-sm'
-                      : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200'
-                  }`}
-                >
-                  <span className="text-sm">{emoji}</span>
-                  <span>{label}</span>
-                </button>
-              ))}
+            {/* ── 向上弹出的操作面板（absolute 悬浮在输入区上方） ── */}
+            {bottomTab && (
+              <>
+                {/* 透明遮罩：点击任意区域关闭菜单 */}
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setBottomTab(null)}
+                />
+              <div
+                key={bottomTab}
+                className="absolute bottom-full left-0 right-0 bg-white border-t border-gray-200 rounded-t-2xl shadow-[0_-6px_24px_rgba(0,0,0,0.10)] z-30 animate-slide-up"
+              >
+                <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                  <p className="text-xs font-semibold text-gray-400">
+                    {bottomTab === 'query' ? '📊 查询数据' : '✏️ 录入数据'}
+                  </p>
+                  <button
+                    onClick={() => setBottomTab(null)}
+                    className="w-6 h-6 flex items-center justify-center rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-100 text-lg leading-none transition-colors"
+                  >×</button>
+                </div>
+
+                {bottomTab === 'query' && (
+                  <div className="px-3 pb-4 grid grid-cols-3 gap-2">
+                    {QUICK_ACTIONS.map(({ emoji, label, action }) => (
+                      <button
+                        key={action}
+                        onClick={() => { handleQuickAction(action); setBottomTab(null) }}
+                        disabled={isSending}
+                        className="flex flex-col items-center gap-1 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 disabled:opacity-40 rounded-xl py-3 px-2 transition-colors"
+                      >
+                        <span className="text-xl">{emoji}</span>
+                        <span className="text-[10px] text-gray-600 font-medium text-center leading-tight">{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {bottomTab === 'write' && (
+                  <div className="px-3 pb-4 grid grid-cols-3 gap-2">
+                    {WRITE_ACTIONS.map(({ emoji, label, action }) => (
+                      <button
+                        key={action}
+                        onClick={() => { openWriteForm(action); setBottomTab(null) }}
+                        disabled={isSending}
+                        className={`flex flex-col items-center gap-1 rounded-xl py-3 px-2 transition-colors disabled:opacity-40 ${
+                          activeForm === action
+                            ? 'bg-[#941100] text-white shadow-sm'
+                            : 'bg-[#941100]/5 hover:bg-[#941100]/10 border border-[#941100]/10'
+                        }`}
+                      >
+                        <span className="text-xl">{emoji}</span>
+                        <span className={`text-[10px] font-semibold text-center leading-tight ${
+                          activeForm === action ? 'text-white' : 'text-[#941100]'
+                        }`}>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              </>
+            )}
+
+            {/* ── 固定在底部的 Tab 按钮行 ── */}
+            <div className="px-4 pt-2.5 pb-2 flex gap-2 border-b border-gray-100">
+              <button
+                onClick={() => { setBottomTab(t => t === 'query' ? null : 'query'); setActiveForm(null) }}
+                disabled={isSending}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all disabled:opacity-40 ${
+                  bottomTab === 'query'
+                    ? 'bg-gray-800 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                📊 查询数据
+                <span className="text-[10px] opacity-60">{bottomTab === 'query' ? '▲' : '▼'}</span>
+              </button>
+              <button
+                onClick={() => { setBottomTab(t => t === 'write' ? null : 'write') }}
+                disabled={isSending}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all disabled:opacity-40 ${
+                  bottomTab === 'write'
+                    ? 'bg-[#941100] text-white shadow-sm'
+                    : 'bg-[#941100]/5 text-[#941100] border border-[#941100]/20 hover:bg-[#941100]/10'
+                }`}
+              >
+                ✏️ 录入数据
+                <span className="text-[10px] opacity-60">{bottomTab === 'write' ? '▲' : '▼'}</span>
+              </button>
             </div>
 
             {/* Purchase entry form */}
@@ -1148,7 +1400,7 @@ export default function ManagePage() {
               <div className="mx-4 mb-2 border border-stone-200 rounded-2xl bg-stone-50 p-3.5 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-stone-700 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-lg bg-orange-500 flex items-center justify-center text-white text-xs">📥</span>
+                    <span className="w-5 h-5 rounded-lg bg-[#941100] flex items-center justify-center text-white text-xs">📥</span>
                     录入今日进货
                   </span>
                   <button onClick={() => setActiveForm(null)} className="w-6 h-6 flex items-center justify-center rounded-full text-stone-400 hover:text-stone-600 hover:bg-white transition-colors text-lg leading-none">×</button>
@@ -1184,14 +1436,14 @@ export default function ManagePage() {
                 <div className="flex justify-between items-center pt-0.5">
                   <button
                     onClick={() => setPurchaseItems(prev => [...prev, { name: '', qty: '', unit: '斤', price: '' }])}
-                    className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                    className="text-xs text-[#941100] hover:text-[#7a0e00] font-medium"
                   >
                     + 添加商品
                   </button>
                   <button
                     onClick={handlePurchaseSubmit}
                     disabled={isSending || !purchaseItems.some(i => i.name.trim() && Number(i.qty) > 0)}
-                    className="bg-orange-500 hover:bg-orange-600 disabled:bg-stone-200 text-white rounded-xl px-5 py-1.5 text-sm font-semibold transition-colors shadow-sm"
+                    className="bg-[#941100] hover:bg-[#7a0e00] disabled:bg-stone-200 text-white rounded-xl px-5 py-1.5 text-sm font-semibold transition-colors shadow-sm"
                   >
                     确认收货
                   </button>
@@ -1204,7 +1456,7 @@ export default function ManagePage() {
               <div className="mx-4 mb-2 border border-stone-200 rounded-2xl bg-stone-50 p-3.5 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-stone-700 flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-lg bg-orange-500 flex items-center justify-center text-white text-xs">🛒</span>
+                    <span className="w-5 h-5 rounded-lg bg-[#941100] flex items-center justify-center text-white text-xs">🛒</span>
                     补录销售
                   </span>
                   <button onClick={() => setActiveForm(null)} className="w-6 h-6 flex items-center justify-center rounded-full text-stone-400 hover:text-stone-600 hover:bg-white transition-colors text-lg leading-none">×</button>
@@ -1222,7 +1474,7 @@ export default function ManagePage() {
                       onClick={() => setSuppType(t)}
                       className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors border ${
                         suppType === t
-                          ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                          ? 'bg-[#941100] text-white border-[#941100] shadow-sm'
                           : 'bg-white text-stone-500 border-stone-200 hover:bg-stone-50'
                       }`}
                     >
@@ -1247,7 +1499,7 @@ export default function ManagePage() {
                   <button
                     onClick={handleSupplementSubmit}
                     disabled={isSending || !suppProduct.trim() || (suppType !== 'sold_out' && !suppQty)}
-                    className="bg-orange-500 hover:bg-orange-600 disabled:bg-stone-200 text-white rounded-xl px-5 py-1.5 text-sm font-semibold transition-colors shadow-sm"
+                    className="bg-[#941100] hover:bg-[#7a0e00] disabled:bg-stone-200 text-white rounded-xl px-5 py-1.5 text-sm font-semibold transition-colors shadow-sm"
                   >
                     确认补录
                   </button>
@@ -1360,7 +1612,7 @@ export default function ManagePage() {
               <button
                 onClick={handleSend}
                 disabled={isSending || (!inputText.trim() && !selectedImage)}
-                className="w-10 h-10 flex items-center justify-center rounded-2xl bg-orange-500 hover:bg-orange-600 disabled:bg-stone-200 text-white shrink-0 transition-colors font-bold text-base shadow-sm disabled:shadow-none"
+                className="w-10 h-10 flex items-center justify-center rounded-2xl bg-[#941100] hover:bg-[#7a0e00] disabled:bg-stone-200 text-white shrink-0 transition-colors font-bold text-base shadow-sm disabled:shadow-none"
               >
                 {isSending ? '…' : '↑'}
               </button>

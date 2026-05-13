@@ -131,7 +131,7 @@ export const fooApi = {
 // Voice/file uploads use native fetch directly (apiClient doesn't support FormData)
 ```
 
-API files: `lib/api/assistant.ts`, `lib/api/inventory.ts`, `lib/api/resumes.ts`, `lib/api/auth.ts`, `lib/api/posts.ts`
+API files: `lib/api/assistant.ts`, `lib/api/inventory.ts`, `lib/api/sales.ts`, `lib/api/purchase-orders.ts`, `lib/api/damage.ts`, `lib/api/suggestions.ts`, `lib/api/operations.ts`, `lib/api/resumes.ts`, `lib/api/auth.ts`
 
 ### AI Assistant Flow
 
@@ -139,21 +139,39 @@ API files: `lib/api/assistant.ts`, `lib/api/inventory.ts`, `lib/api/resumes.ts`,
 User input (text / image base64 / voice file)
   → POST /api/ai/message  or  POST /api/ai/voice
   → AiService::parseInventoryIntent()   (OpenAI-compatible API)
-  → dispatchToInventory()
-      ├─ Product::findOrCreateByName()   (fuzzy match or auto-create)
-      ├─ Inventory::firstOrCreate([store_id, product_id])
-      └─ InventoryTransaction::create()
-  → Returns { reply, intent, operations[], session_id }
+  → AiAssistantController: intent is query? → fetchQueryData() → card_type + card_data
+                            intent is write? → dispatchToInventory()
+                                ├─ Product::findOrCreateByName()
+                                ├─ Inventory::firstOrCreate([store_id, product_id])
+                                ├─ InventoryTransaction::create()
+                                ├─ InventoryDailySnapshot::record()
+                                ├─ action=in  → PurchaseOrder + PurchaseOrderItem (一批合一张单)
+                                ├─ action=sell/sold_out → SalesOrder + SalesDailySummary
+                                └─ action=out → DamageRecord (自动关联最近进货单/供应商)
+  → Returns { reply, intent, operations[], card_type?, card_data?, session_id }
 ```
 
-`AiService` (`backend/app/Services/AiService.php`) wraps the LLM API. Configure in `backend/.env`:
-```
-AI_BASE_URL=https://...
-AI_API_KEY=...
-AI_MODEL=gpt-4o
-AI_VISION_MODEL=gpt-4o
-AI_WHISPER_MODEL=whisper-1
-```
+**AI 模型分工（三路独立配置）：**
+
+| 用途 | 环境变量 | 当前值 |
+|------|---------|-------|
+| 文字意图解析 | `AI_BASE_URL` / `AI_MODEL` | DeepSeek `deepseek-v4-pro` |
+| 图片识别 | `AI_VISION_BASE_URL` / `AI_VISION_MODEL` | fidelityai `gemini-3-flash-preview` |
+| 语音转文字 | `AI_WHISPER_BASE_URL` / `AI_WHISPER_MODEL` | fidelityai `whisper-1` |
+
+**AI intent 分两大类：**
+- **写入类** → `dispatchToInventory()`，返回 `operations[]`
+- **查询类** → `fetchQueryData()`，返回 `card_type` + `card_data`（直接查 DB，不再调 LLM）
+
+### Services Layer
+
+| Service | 职责 |
+|---------|------|
+| `AiService` | LLM 调用封装（文字/图片/语音三路） |
+| `SuggestionService` | 进货/促销建议算法（近7天快照→补货优先级），同时被 `SuggestionController` 和 `AiAssistantController` 调用 |
+| `ResumeParserService` | 简历 AI 解析 + 自然语言搜索条件提取 |
+| `JwtService` | JWT 签发与验证（HS256，secret 来自 `config/jwt.php`） |
+| `SalesUploadService` | 销售数据批量上传处理 |
 
 ### Database
 
@@ -190,6 +208,47 @@ Add new resource:
 ```bash
 php artisan make:filament-resource Product --generate
 ```
+
+## 前端注意事项
+
+### 生产模式运行
+前端以 `npm run start`（生产模式）运行在 `:3113`，**修改前端代码后必须重新 build 才能生效**：
+```bash
+cd frontend
+npm run build
+# 重启进程（当前用 nohup/后台方式启动）
+nohup npm run start > /tmp/nextjs.log 2>&1 &
+```
+
+### 日期处理陷阱
+前端所有 `todayStr()` 函数**必须使用本地时间**，不能用 `new Date().toISOString().slice(0, 10)`（返回 UTC，香港时间凌晨 0-8 点会早一天）：
+```ts
+// ✅ 正确
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+// ❌ 错误（UTC 日期）
+return new Date().toISOString().slice(0, 10)
+```
+后端时区为 `Asia/Shanghai`，MySQL 也使用 SYSTEM（CST），日期存储和查询均基于本地时间。
+
+---
+
+## 部署架构（生产）
+
+nginx 反向代理（`/etc/nginx/conf.d/default.conf`）：
+
+| 域名 | 代理到 | 内容 |
+|------|--------|------|
+| `s.xingke888.com` | `:8080` | Laravel API + Filament 后台 |
+| `s.tianhegongyuan.com` | `:3113` | Next.js 前端 |
+
+两个域名均通过 Cloudflare 代理（橙云），SSL 证书由 Let's Encrypt 签发（`/etc/letsencrypt/live/`）。
+
+**⚠️ nginx 配置修改后需以 root 执行 `nginx -t && nginx -s reload`**，非 root 执行 `nginx -t` 会因证书权限报错（误报，实际 nginx 进程可正常读取）。
+
+---
 
 ## Laravel 12 Conventions
 
@@ -248,15 +307,23 @@ php artisan make:filament-resource Product --generate
 
 **AI 识别的 intent / action 枚举：**
 
-| intent | action | 语义 |
-|--------|--------|------|
-| `purchase_receipt` | `in` | 进货到货 |
-| `sale_report` | `sell` | 有具体售出量 |
-| `sold_out` | `sold_out` | 商品完全售罄 |
-| `remaining` | `remaining` | 报告剩余量（倒推售出量） |
-| `stocktake` | `adjust` | 盘点上报绝对值 |
-| `waste_report` | `out` | 损耗/报废 |
-| `other` | — | 非库存类（仅写 log，不操作库存） |
+| intent | action | 语义 | 后端写入 |
+|--------|--------|------|---------|
+| `purchase_receipt` | `in` | 进货到货 | InventoryTransaction + PurchaseOrder/Item |
+| `sale_report` | `sell` | 有具体售出量 | InventoryTransaction + SalesOrder + SalesDailySummary |
+| `sold_out` | `sold_out` | 商品完全售罄 | 同上，qty=0 |
+| `remaining` | `remaining` | 报告剩余量（倒推售出量） | 同上 |
+| `stocktake` | `adjust` | 盘点上报绝对值 | InventoryTransaction(type=4) |
+| `waste_report` | `out` | 损耗/报废（items 含 `reason` 字段） | InventoryTransaction(type=3) + DamageRecord |
+| `inventory_query` | — | 查当前库存 | 返回 card_type=inventory |
+| `sales_today_query` | — | 查今日/历史销售 | 返回 card_type=sales_today |
+| `daily_overview_query` | — | 查每日运营概览 | 返回 card_type=daily_overview |
+| `purchase_orders_query` | — | 查进货单 | 返回 card_type=purchase_orders |
+| `daily_logs_query` | — | 查操作日志 | 返回 card_type=daily_logs |
+| `weather_query` | — | 查天气（LLM生成+DB缓存） | 返回 card_type=weather |
+| `refund_claims_query` | — | 查供应商退款申请 | 返回 card_type=refund_claims |
+| `suggestions_query` | — | 查进货/促销建议 | 返回 card_type=suggestions，调 SuggestionService |
+| `other` | — | 非库存类 | 仅写 DailyOperationLog |
 
 ---
 
@@ -414,6 +481,51 @@ POST /api/sales  (POS 收银台)
 - `status`: 0=无效 1=求职中 2=已入职 3=暂不求职
 
 **前端页面：** `/resumes`（搜索+列表）、`/resumes/upload`（单份/批量/图片 三Tab录入）
+
+---
+
+### 损耗管理 Damage
+
+`backend/app/Http/Controllers/Api/DamageController.php` — `backend/app/Models/DamageRecord.php`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/damage` | 录入损耗（扣库存 + 建 DamageRecord + 自动关联供应商） |
+| GET | `/api/damage` | 列表（`?date=&product_id=&status=&supplier_id=`） |
+| GET | `/api/damage/stats` | 按商品/供应商汇总（`?from=&to=`） |
+| POST | `/api/damage/{id}/images` | 追加图片 |
+
+**DamageRecord 关键字段：**
+- `purchase_order_item_id` — 自动关联最近一笔已收货进货单明细（用于追溯供应商）
+- `supplier_id` / `unit_cost` / `total_claimed` — 索赔金额（= qty × unit_cost）
+- `status`: 1=待处理 2=已提交申请 3=已退款
+- AI 录入时 `reason` 从 AI 解析的 items[].reason 中取得
+
+**完整写链（AI 损耗为例）：**
+```
+AI "番茄烂了5斤"
+  → intent=waste_report, action=out, reason="变质"
+  → inventory.current_qty -= qty
+  → InventoryTransaction(type=3)
+  → InventoryDailySnapshot.damage_qty +=
+  → DamageRecord（自动查最近进货单关联 supplier_id）
+  → DailyOperationLog
+```
+
+---
+
+### 供应商退款申请 Refund Claims
+
+`backend/app/Http/Controllers/Api/SupplierRefundClaimController.php`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/refund-claims` | 从损耗记录生成退款申请（需 `supplier_id` + `damage_record_ids[]`） |
+| GET | `/api/refund-claims` | 列表（`?status=&supplier_id=`） |
+| GET | `/api/refund-claims/{id}` | 详情（含明细） |
+| PUT | `/api/refund-claims/{id}/status` | 更新状态（1=待处理 2=已提交 4=已退款 5=已拒绝） |
+
+提交退款后，关联的 `DamageRecord.status` 自动更新为 2（已提交）；退款确认后更新为 3（已退款）。
 
 ---
 

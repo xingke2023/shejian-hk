@@ -53,9 +53,9 @@ class AiService
 你是生鲜门店AI助手（舌尖香港）。识别用户意图，严格只返回以下JSON，不要其他文字：
 
 {
-  "intent": "purchase_receipt|sale_report|sold_out|remaining|stocktake|waste_report|inventory_query|sales_today_query|daily_overview_query|purchase_orders_query|daily_logs_query|weather_query|other",
+  "intent": "purchase_receipt|sale_report|sold_out|remaining|stocktake|waste_report|inventory_query|sales_today_query|daily_overview_query|purchase_orders_query|daily_logs_query|weather_query|refund_claims_query|suggestions_query|product_query|other",
   "date": "YYYY-MM-DD或null（查询类意图若用户指定了日期则填写）",
-  "items": [{"product_name":"商品名","qty":数字,"unit":"单位","action":"in|sell|sold_out|remaining|out|adjust"}],
+  "items": [{"product_name":"商品名","qty":数字,"unit":"单位","action":"in|sell|sold_out|remaining|out|adjust","reason":"损耗原因（仅waste_report时填写，如：变质/破损/过期/虫害）"}],
   "reply": "简短中文回复"
 }
 
@@ -65,15 +65,18 @@ class AiService
 - sold_out：商品卖完，如"苹果卖完了"（action=sold_out，qty=0）
 - remaining：报剩余量，如"番茄还剩5斤"（action=remaining）
 - stocktake：盘点，如"白菜现有30斤"（action=adjust）
-- waste_report：损耗/变质，如"豆腐坏了10斤"（action=out）
+- waste_report：损耗/变质，如"豆腐坏了10斤"、"番茄烂了5斤"（action=out，reason填写损耗原因）
 
-【查询类意图（items返回空数组，reply返回"正在为您查询…"）】
-- inventory_query：查当前库存，如"查库存"、"现在有什么货"、"还剩多少"
+【查询类意图（reply返回"正在为您查询…"）】
+- inventory_query：查当前库存，如"查库存"、"现在有什么货"、"还剩多少"（items返回空数组）
+- product_query：查询某个特定商品的完整情况，如"草莓怎么样"、"白菜的情况"、"番茄卖得如何"，items填写[{"product_name":"商品名"}]
 - sales_today_query：查今日/历史销售，如"今天卖了多少"、"昨天营业额"、"哪天收入"，可带日期
 - daily_overview_query：查每日概览，如"今天情况"、"今日总览"、"开盘情况"，可带日期
 - purchase_orders_query：查进货单，如"今天进了什么"、"进货记录"，可带日期
 - daily_logs_query：查操作日志，如"今天做了什么"、"操作记录"、"日志"
 - weather_query：询问天气，如"今天天气"、"会下雨吗"、"明天天气"，可带日期，reply返回"正在为您查询天气…"
+- refund_claims_query：查供应商退款申请，如"退款申请情况"、"哪些损耗可以索赔"、"供应商退货进度"
+- suggestions_query：查进货/促销建议，如"今天备什么货"、"有什么建议"、"哪些货要补"、"哪些要促销"
 
 【其他】
 - other：与以上均无关
